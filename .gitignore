@@ -1,0 +1,56 @@
+# Env ve secret'lar
+.env
+.env.*
+!.env.example
+*.local
+
+# MCP config (API key içerir, repo'ya girmez)
+.mcp.json
+
+# Build çıktıları
+dist/
+build/
+.next/
+.nuxt/
+out/
+.expo/
+.expo-shared/
+
+# Bağımlılıklar
+node_modules/
+.pnp.*
+.yarn/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Agent local memory (kişisel, repo'ya girmez)
+.claude/agent-memory-local/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
