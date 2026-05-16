@@ -162,16 +162,17 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `002-enderyapi-scraper-poc`
-- Spec: [specs/002-enderyapi-scraper-poc/spec.md](specs/002-enderyapi-scraper-poc/spec.md)
-- Plan: [specs/002-enderyapi-scraper-poc/plan.md](specs/002-enderyapi-scraper-poc/plan.md)
-- Research: [specs/002-enderyapi-scraper-poc/research.md](specs/002-enderyapi-scraper-poc/research.md)
-- Data model: [specs/002-enderyapi-scraper-poc/data-model.md](specs/002-enderyapi-scraper-poc/data-model.md)
-- Contracts: [specs/002-enderyapi-scraper-poc/contracts/scrape-cli.md](specs/002-enderyapi-scraper-poc/contracts/scrape-cli.md)
-- Quickstart (manuel test): [specs/002-enderyapi-scraper-poc/quickstart.md](specs/002-enderyapi-scraper-poc/quickstart.md)
+**Aktif feature**: `003-supabase-schema`
+- Spec: [specs/003-supabase-schema/spec.md](specs/003-supabase-schema/spec.md)
+- Plan: [specs/003-supabase-schema/plan.md](specs/003-supabase-schema/plan.md)
+- Research: [specs/003-supabase-schema/research.md](specs/003-supabase-schema/research.md)
+- Data model: [specs/003-supabase-schema/data-model.md](specs/003-supabase-schema/data-model.md)
+- Contracts: [specs/003-supabase-schema/contracts/schema-sql.md](specs/003-supabase-schema/contracts/schema-sql.md)
+- Quickstart (manuel test): [specs/003-supabase-schema/quickstart.md](specs/003-supabase-schema/quickstart.md)
 
-**Önceki feature** (tamamlandı, merge bekleniyor): `001-auth-dashboard`
-- Spec: [specs/001-auth-dashboard/spec.md](specs/001-auth-dashboard/spec.md)
+**Önceki feature'lar** (tamamlandı, push edildi):
+- `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
+- `002-enderyapi-scraper-poc` — [spec](specs/002-enderyapi-scraper-poc/spec.md) (Senaryo A; gerçek scraper 004'te)
 
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.
