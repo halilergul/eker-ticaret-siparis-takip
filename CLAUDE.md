@@ -162,13 +162,16 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `001-auth-dashboard`
+**Aktif feature**: `002-enderyapi-scraper-poc`
+- Spec: [specs/002-enderyapi-scraper-poc/spec.md](specs/002-enderyapi-scraper-poc/spec.md)
+- Plan: [specs/002-enderyapi-scraper-poc/plan.md](specs/002-enderyapi-scraper-poc/plan.md)
+- Research: [specs/002-enderyapi-scraper-poc/research.md](specs/002-enderyapi-scraper-poc/research.md)
+- Data model: [specs/002-enderyapi-scraper-poc/data-model.md](specs/002-enderyapi-scraper-poc/data-model.md)
+- Contracts: [specs/002-enderyapi-scraper-poc/contracts/scrape-cli.md](specs/002-enderyapi-scraper-poc/contracts/scrape-cli.md)
+- Quickstart (manuel test): [specs/002-enderyapi-scraper-poc/quickstart.md](specs/002-enderyapi-scraper-poc/quickstart.md)
+
+**Önceki feature** (tamamlandı, merge bekleniyor): `001-auth-dashboard`
 - Spec: [specs/001-auth-dashboard/spec.md](specs/001-auth-dashboard/spec.md)
-- Plan: [specs/001-auth-dashboard/plan.md](specs/001-auth-dashboard/plan.md)
-- Research: [specs/001-auth-dashboard/research.md](specs/001-auth-dashboard/research.md)
-- Data model: [specs/001-auth-dashboard/data-model.md](specs/001-auth-dashboard/data-model.md)
-- Contracts: [specs/001-auth-dashboard/contracts/auth-actions.md](specs/001-auth-dashboard/contracts/auth-actions.md)
-- Quickstart (manuel test): [specs/001-auth-dashboard/quickstart.md](specs/001-auth-dashboard/quickstart.md)
 
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.
