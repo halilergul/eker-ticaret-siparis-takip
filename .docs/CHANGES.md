@@ -81,3 +81,23 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 - **Bilinen sınırlama**: `getOrderDetail` her sipariş için yalnızca 1 ürün satırı parse ediyor; muhtemelen tablo başlığı/summary satırı sayılıyor. T022 sırasında --headed mode'da düzeltilir (item parser refine).
 - **Manuel doğrulama**: QS-03 ✅ (5 sipariş 13sn'de DB'ye yazıldı), QS-04 ✅ (idempotent: 2. koşumda 0 yeni), QS-06 ✅ (scrape_runs zengin), QS-08 ✅ (zero secret leak).
 - **Durum**: Kısmi tamamlandı (US1 + US3 ✅, US2 → 005). MVP açısından çalışır: sipariş geçmişi DB'de, 006 dashboard feature artık başlayabilir.
+
+### CR-005 — Feature 005-orders-dashboard tamamlandı (kod)
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Authenticated `/dashboard` sipariş listesi + tedarikçi/durum filtre'leri (URL search params) + sipariş detayı (`/dashboard/orders/[id]`) + data-quality flag. Spec: [specs/005-orders-dashboard/spec.md](../specs/005-orders-dashboard/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni:**
+    - `lib/format/{date,currency}.ts` — `Intl.DateTimeFormat('tr-TR')` + `Intl.NumberFormat('tr-TR', { currency: 'TRY' })`
+    - `lib/validations/order-filter.ts` — zod schema + `parseFilter`
+    - `lib/queries/orders.ts` — data layer (4 fonksiyon: `listOrders`, `getOrderDetail`, `listSuppliers`, `listDistinctStatuses`) + tip dönüşüm helper'ları
+    - `components/features/orders/{empty-state,copy-command-button,order-row,order-table,filter-bar,order-detail-card}.tsx`
+    - `app/(app)/dashboard/orders/[id]/page.tsx`
+  - **Değiştirilen:**
+    - `lib/routes.ts` — `ORDER_DETAIL(id)` eklendi
+    - `app/(app)/dashboard/page.tsx` — Server Component rewrite (placeholder → tablo + filter bar)
+- **Mimari kararlar:** Server Component default; sadece `OrderRow`, `FilterBar`, `CopyCommandButton` Client. Filter state URL search params'ta (zod ile validate), `useTransition` UX için. Sipariş detayı modal değil ayrı route (Server Component friendly, bookmark-able). Distinct status'lar için Supabase REST native DISTINCT yok → fetch + `Set` tekleştirme (V2: RPC).
+- **Etki analizi:** ~4 saat (spec + plan + research + tasks + code). DB schema'ya dokunulmadı (003/004 schema yeterli). 32 task'tan 22 kod task'ı tamam; T012/T013/T017-T019/T022-T026/T029/T032 manuel browser QS testleri (kullanıcı doğrulayacak).
+- **Constitution gates**: 15/15 ✅, G15 hâlâ ⚠ (credentials lokal — 008 GitHub Actions migrasyonunda kapanır; bu feature secret'lara dokunmuyor).
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard` 107 kB, `/dashboard/orders/[id]` 106 kB First Load JS); advisor'larda 005 kaynaklı yeni bulgu yok (önceki state korunuyor).
+- **Durum**: Kod tamam, manuel QS-01 → QS-10 (browser) kullanıcı doğrulamasına hazır.

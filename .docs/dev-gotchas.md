@@ -127,3 +127,18 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Backend / Postgres
 - **Detay:** Tek statement içinde `WITH del AS (DELETE ... RETURNING id) SELECT count(*) FROM child WHERE order_id IN (SELECT id FROM del)` yaparsanız, alt SELECT child tablosunun **DELETE'ten önceki snapshot'ını** okur (Postgres docs: "All the statements are executed with the same snapshot"). Dolayısıyla CASCADE delete tetiklenip child satırlar silinse bile count > 0 görünür — yanıltıcı.
 - **Çözüm/Önlem:** CASCADE doğrulamasını **iki ayrı statement'ta** yap: önce `DELETE ... RETURNING id` (gerçek silme), sonra `SELECT count(*) FROM child` (yeni snapshot). 003 QS-04 testinde bu davranış gözlemlendi; ikinci SELECT 0 döndü.
+
+### Next.js 15 — `params` ve `searchParams` artık Promise
+- **Tarih:** 2026-05-17
+- **Konu:** Frontend / Next.js 15
+- **Detay:** App Router'da Page Component props'larında `params` ve `searchParams` Next.js 15'te **Promise** oldu — `await` etmeden kullanılamaz. Eski `{ params }: { params: { id: string } }` deseni TS hatasına / runtime crash'e yol açar.
+- **Çözüm/Önlem:**
+  - Tip: `params: Promise<{ id: string }>` ve `searchParams: Promise<Record<string, string | string[] | undefined>>`
+  - Kullanım: `const { id } = await params;` veya `const sp = await searchParams;`
+  - 005 feature'da `app/(app)/dashboard/page.tsx` ve `app/(app)/dashboard/orders/[id]/page.tsx` bu desene göre yazıldı.
+
+### Supabase REST native DISTINCT desteklemiyor
+- **Tarih:** 2026-05-17
+- **Konu:** Backend / Supabase JS
+- **Detay:** PostgREST `SELECT DISTINCT col FROM table` yapmıyor; `.select("col")` her satır için satır döner. Filter dropdown'ları için distinct değer listesi gerekirken bu sınırlama can sıkar.
+- **Çözüm/Önlem:** Küçük tablo (< ~5000 satır) için: tüm değerleri çek, JS'te `new Set()` ile tekleştir + `Array.from(set).sort()`. 005'te `listDistinctStatuses()` bu deseni kullanıyor. Büyüme noktası: bir RPC fonksiyonu (`get_distinct_statuses()`) veya materialized view tanımla.

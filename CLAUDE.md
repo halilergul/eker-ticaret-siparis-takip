@@ -162,18 +162,19 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `004-enderyapi-scraper-prod`
-- Spec: [specs/004-enderyapi-scraper-prod/spec.md](specs/004-enderyapi-scraper-prod/spec.md)
-- Plan: [specs/004-enderyapi-scraper-prod/plan.md](specs/004-enderyapi-scraper-prod/plan.md)
-- Research: [specs/004-enderyapi-scraper-prod/research.md](specs/004-enderyapi-scraper-prod/research.md)
-- Data model: [specs/004-enderyapi-scraper-prod/data-model.md](specs/004-enderyapi-scraper-prod/data-model.md)
-- Contracts: [specs/004-enderyapi-scraper-prod/contracts/](specs/004-enderyapi-scraper-prod/contracts/) (adapter-interface, cli-contract, scrape-runs-sql)
-- Quickstart (manuel test): [specs/004-enderyapi-scraper-prod/quickstart.md](specs/004-enderyapi-scraper-prod/quickstart.md)
+**Aktif feature**: `005-orders-dashboard`
+- Spec: [specs/005-orders-dashboard/spec.md](specs/005-orders-dashboard/spec.md)
+- Plan: [specs/005-orders-dashboard/plan.md](specs/005-orders-dashboard/plan.md)
+- Research: [specs/005-orders-dashboard/research.md](specs/005-orders-dashboard/research.md)
+- Data model: [specs/005-orders-dashboard/data-model.md](specs/005-orders-dashboard/data-model.md)
+- Contracts: [specs/005-orders-dashboard/contracts/](specs/005-orders-dashboard/contracts/) (routes, filter-url, data-queries)
+- Quickstart (manuel test): [specs/005-orders-dashboard/quickstart.md](specs/005-orders-dashboard/quickstart.md)
 
 **Önceki feature'lar** (tamamlandı, push edildi):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
 - `002-enderyapi-scraper-poc` — [spec](specs/002-enderyapi-scraper-poc/spec.md) (PoC Senaryo A)
 - `003-supabase-schema` — [spec](specs/003-supabase-schema/spec.md) (5 tablo + RLS + RPC + types)
+- `004-enderyapi-scraper-prod` — [spec](specs/004-enderyapi-scraper-prod/spec.md) (US1+US3; US2 005+'ya ertelendi)
 
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.
