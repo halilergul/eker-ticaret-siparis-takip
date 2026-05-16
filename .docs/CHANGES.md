@@ -37,3 +37,22 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
   - **Değiştirilen:** `package.json` (devDeps: playwright + tsx + dotenv; script: `scrape:enderyapi`), `.env.example` (ENDERYAPI_USERNAME, ENDERYAPI_PASSWORD), `.gitignore` (`scrape-debug/`)
 - **Etki analizi:** ~4 saat (spec + plan + research + tasks + code). Next.js runtime'ına etkisi yok (scraper standalone). 3 bilinçli Constitution sapması (G2, G13, G14) plan.md → Complexity Tracking'te belgelendi; 004-005'te düzeltilecek.
 - **Durum:** Tamamlandı (2026-05-16). **Senaryo A — feasibility kanıtlandı.** Login + navigation + parsing tüm üç adım çalışıyor; 20 sipariş başarıyla okundu. Site yapısı keşfedildi: SPA, iki-seviyeli (sipariş listesi → siparis-detay → ürün satırı), katalog 3. seviye. Implementation sırasında 4 küçük iterasyon yapıldı: (1) submit selector array genişletildi + Enter fallback, (2) 2FA detection sıkılaştırıldı (false positive fix), (3) SPA login için URL change wait, (4) detay sayfası için networkidle wait + verbose log. Site bulguları `dev-gotchas.md`'ye işlendi; 003'te Supabase schema'sı bu yapıya uygun (orders + order_items + products) tasarlanacak, 004'te tam scraper yazılacak.
+
+### CR-003 — Feature 003-supabase-schema tamamlandı (kod)
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Tedarikçi sipariş ve fiyat takibi için Supabase Postgres schema'sı. 5 tablo (`suppliers`, `supplier_orders`, `order_items`, `products`, `price_snapshots`) + RLS + RPC fonksiyon (`record_price_observation`) + TypeScript type üretimi. Spec: [specs/003-supabase-schema/spec.md](../specs/003-supabase-schema/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni migration'lar** (`supabase/migrations/`):
+    - `20260516153627_core_tables.sql` — 5 tablo + index'ler + CHECK + FK + UNIQUE
+    - `20260516153940_updated_at_trigger.sql` — `set_updated_at()` + 4 tabloya trigger
+    - `20260516154009_rls_policies.sql` — RLS enable + 20 policy (4×5)
+    - `20260516154039_seed_enderyapi.sql` — supplier seed
+    - `20260516154251_record_price_observation.sql` — idempotent fiyat snapshot RPC
+    - `20260516154431_fix_set_updated_at_search_path.sql` — advisor düzeltme
+    - `20260516154507_rls_policies_optimize_auth_calls.sql` — `(select auth.uid())` ile sarma
+    - `20260516154905_grant_table_privileges_to_authenticated.sql` — authenticated role'a CRUD GRANT
+  - **Yeni:** `lib/supabase/database.types.ts` (Supabase MCP generate_typescript_types çıktısı)
+  - **Değiştirilen:** `lib/supabase/client.ts`, `lib/supabase/server.ts` (`<Database>` generic eklendi)
+- **Etki analizi:** ~3 saat (spec + plan + research + tasks + code + 8 manuel QS doğrulama + 3 advisor düzeltmesi). Constitution 14/14 ✅ — bilinçli sapma yok. 002'deki G14 (migration file-versioning) düzeltildi. Authenticated role privilege eksikliği implementation sırasında yakalandı, GRANT migration ile düzeltildi (dev-gotchas'a kaydedildi).
+- **Durum:** Tamamlandı. Quickstart QS-00 → QS-08 tamamı ✅. Advisor: schema-related 0 critical (1 ek WARN `auth_leaked_password_protection` Auth Dashboard'da manuel açılır). 004 scraper artık bu schema'ya yazabilir.

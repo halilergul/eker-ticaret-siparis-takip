@@ -84,3 +84,40 @@ Agent'lar bu dosyayı şu durumlarda günceller:
   2. **Network idle:** `page.waitForLoadState("networkidle", { timeout: 10000 })` — XHR'lar dindiğinde
   3. **Spesifik element:** `page.waitForSelector(".dashboard-loaded", { timeout: 10000 })` — bilinen bir element render olduğunda
   4. Genelde 1 + 2'yi try/catch ile chain etmek robust olur. `enderyapi.ts`'te bu pattern var.
+
+### Supabase RLS + authenticated role: `GRANT` zorunlu, RLS tek başına yetmiyor
+- **Tarih:** 2026-05-16
+- **Konu:** Backend / Supabase / RLS
+- **Detay:** Yeni bir tablo `CREATE TABLE ... ; ALTER TABLE ... ENABLE ROW LEVEL SECURITY` ile kurulduğunda, **table-level privilege**'lar (`SELECT/INSERT/UPDATE/DELETE`) `authenticated` role'a otomatik verilmez. RLS politika ekleyip kullanıcı oturum açsa bile `42501 permission denied for table X` alır — RLS hiç değerlendirilmez bile, privilege check önce yapılır. Bu davranış MCP `apply_migration` ile aynı; psql ile de aynı. Default Supabase davranışı değil — bizim 001'de uyguladığımız `revoke_rls_auto_enable_from_public` migration'ı `public` ve `auth` rollerinden privilege'ları çekti, ama `authenticated`'a açıkça GRANT vermek lazım.
+- **Çözüm/Önlem:** Her yeni tablo migration'ından sonra (veya en geç policy migration'ı ile beraber) şu pattern'i ekle:
+  ```sql
+  GRANT SELECT, INSERT, UPDATE, DELETE ON public.<table> TO authenticated;
+  GRANT EXECUTE ON FUNCTION public.<rpc_fn>(<args>) TO authenticated;
+  ```
+  `service_role` zaten supabase_admin grubunda, RLS bypass + tüm privilege'ları var; `anon`'a GRANT vermiyoruz (defense in depth: anon hiç dokunamaz). Bu pattern 003'te `20260516154905_grant_table_privileges_to_authenticated.sql`'de uygulandı.
+
+### `auth.uid()` RLS policy'lerinde re-evaluate ediliyor — `(select auth.uid())` ile sar
+- **Tarih:** 2026-05-16
+- **Konu:** Backend / Supabase / Performance
+- **Detay:** RLS policy içinde `auth.uid()` (veya `current_setting()`) doğrudan kullanılırsa Postgres her satır için bu fonksiyonu yeniden çağırır → büyük tablolarda ciddi yavaşlama. Supabase advisor `auth_rls_initplan` (lint 0003) bu yüzden WARN basıyor.
+- **Çözüm/Önlem:** `auth.uid() IS NOT NULL` yerine `(select auth.uid()) IS NOT NULL` yaz. Postgres bunu InitPlan olarak optimize eder, fonksiyon query başına 1 kez çağrılır. 003'te `20260516154507_rls_policies_optimize_auth_calls.sql` ile 20 policy düzeltildi (DROP + CREATE pattern; Postgres ALTER POLICY ... USING desteklemez).
+
+### `function_search_path_mutable` — her PL/pgSQL function'a `SET search_path` ekle
+- **Tarih:** 2026-05-16
+- **Konu:** Backend / Supabase / Security
+- **Detay:** Postgres function `search_path` set etmezse, çağıran kullanıcının `search_path`'ini kullanır. Bu, eğer fonksiyon `SECURITY DEFINER` ise privilege escalation'a, `SECURITY INVOKER` ise davranış belirsizliğine yol açabilir. Supabase advisor `function_search_path_mutable` (lint 0011) WARN basar.
+- **Çözüm/Önlem:** Her function tanımına `SET search_path = public, pg_temp` ekle:
+  ```sql
+  CREATE OR REPLACE FUNCTION public.foo(...)
+  RETURNS ...
+  LANGUAGE plpgsql
+  SET search_path = public, pg_temp     -- bu satır
+  AS $$ ... $$;
+  ```
+  003'te `set_updated_at()` ve `record_price_observation()` ikisinde de aktif.
+
+### Postgres CTE snapshot — DELETE returning + SELECT order_items hatalı sonuç verir
+- **Tarih:** 2026-05-16
+- **Konu:** Backend / Postgres
+- **Detay:** Tek statement içinde `WITH del AS (DELETE ... RETURNING id) SELECT count(*) FROM child WHERE order_id IN (SELECT id FROM del)` yaparsanız, alt SELECT child tablosunun **DELETE'ten önceki snapshot'ını** okur (Postgres docs: "All the statements are executed with the same snapshot"). Dolayısıyla CASCADE delete tetiklenip child satırlar silinse bile count > 0 görünür — yanıltıcı.
+- **Çözüm/Önlem:** CASCADE doğrulamasını **iki ayrı statement'ta** yap: önce `DELETE ... RETURNING id` (gerçek silme), sonra `SELECT count(*) FROM child` (yeni snapshot). 003 QS-04 testinde bu davranış gözlemlendi; ikinci SELECT 0 döndü.
