@@ -160,3 +160,16 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - API key'ler asla kaynak koda girmez — `.env` veya gizli config kullan
 - `.docs/project-init/` salt okunur referans — agent değiştiremez
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
+
+<!-- SPECKIT START -->
+**Aktif feature**: `001-auth-dashboard`
+- Spec: [specs/001-auth-dashboard/spec.md](specs/001-auth-dashboard/spec.md)
+- Plan: [specs/001-auth-dashboard/plan.md](specs/001-auth-dashboard/plan.md)
+- Research: [specs/001-auth-dashboard/research.md](specs/001-auth-dashboard/research.md)
+- Data model: [specs/001-auth-dashboard/data-model.md](specs/001-auth-dashboard/data-model.md)
+- Contracts: [specs/001-auth-dashboard/contracts/auth-actions.md](specs/001-auth-dashboard/contracts/auth-actions.md)
+- Quickstart (manuel test): [specs/001-auth-dashboard/quickstart.md](specs/001-auth-dashboard/quickstart.md)
+
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan.
+<!-- SPECKIT END -->

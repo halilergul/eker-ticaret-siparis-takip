@@ -16,6 +16,9 @@ out/
 .expo/
 .expo-shared/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Bağımlılıklar
 node_modules/
 .pnp.*
@@ -37,6 +40,9 @@ venv/
 
 # Agent local memory (kişisel, repo'ya girmez)
 .claude/agent-memory-local/
+
+# Claude Code lokal ayarlar (kişisel permission listesi)
+.claude/settings.local.json
 
 # OS
 .DS_Store
