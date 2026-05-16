@@ -1,5 +1,15 @@
 /**
- * Enderyapi Scraper PoC
+ * @deprecated 004 sonrası: yerine `npm run scrape -- --supplier enderyapi` kullan.
+ * Bu CLI 002 PoC'tan kalma standalone okuyucu; DB yazma yok, sadece stdout.
+ * 005'te silinecek.
+ */
+
+console.warn(
+  "[scrape:enderyapi] DEPRECATED — yerine: npm run scrape -- --supplier enderyapi",
+);
+
+/**
+ * Enderyapi Scraper PoC (legacy)
  *
  * Bu CLI b2b.enderyapi.com.tr sitesine login olur, sipariş geçmişi ilk
  * sayfasındaki satırları parse eder, her ürünün güncel fiyatını detay

@@ -94,7 +94,7 @@ Agent'lar bu dosyayı şu durumlarda günceller:
   GRANT SELECT, INSERT, UPDATE, DELETE ON public.<table> TO authenticated;
   GRANT EXECUTE ON FUNCTION public.<rpc_fn>(<args>) TO authenticated;
   ```
-  `service_role` zaten supabase_admin grubunda, RLS bypass + tüm privilege'ları var; `anon`'a GRANT vermiyoruz (defense in depth: anon hiç dokunamaz). Bu pattern 003'te `20260516154905_grant_table_privileges_to_authenticated.sql`'de uygulandı.
+  Önemli düzeltme (004'te keşfedildi): `service_role` "zaten herşeye erişir" varsayımı YANLIŞ — 001'deki `revoke_rls_auto_enable_from_public` migration'ı `service_role`'den de table-level privilege'ları çekti. Scraper service_role ile bağlanıyor ve `42501 permission denied for table suppliers` alıyordu. Çözüm: `service_role`'e de açıkça GRANT (004'te `20260516202902_grant_table_privileges_to_service_role.sql`). `anon`'a GRANT vermiyoruz (defense in depth). Her yeni tablo için **3 grant** lazım: authenticated + service_role (RLS bypass için doğal yetki yok!) + sometimes service_role function'lara EXECUTE.
 
 ### `auth.uid()` RLS policy'lerinde re-evaluate ediliyor — `(select auth.uid())` ile sar
 - **Tarih:** 2026-05-16
@@ -115,6 +115,12 @@ Agent'lar bu dosyayı şu durumlarda günceller:
   AS $$ ... $$;
   ```
   003'te `set_updated_at()` ve `record_price_observation()` ikisinde de aktif.
+
+### Adapter pattern + DB layer ayrımı: writer modülü tek source of truth
+- **Tarih:** 2026-05-16
+- **Konu:** Scraper / Mimari
+- **Detay:** 004'te kurulan adapter mimarisi: `lib/scraper/adapters/<slug>.ts` saf veri çıkarır (Playwright + parse), DB'yi bilmez. DB yazma `lib/scraper/supabase-writer.ts`'de toplanır; service_role client tek yerde initialize edilir. Orchestrator (`scripts/scrape/run.ts`) ikisini birleştirir. Bu ayrım: (1) adapter'lar mock'lanabilir; (2) secret yönetimi merkezi (servis_role client tek modülde); (3) yeni adapter eklemek minimum cognitive yük (login + 3 parser metodu, DB knowledge yok).
+- **Çözüm/Önlem:** Yeni adapter eklerken DB'ye yazma kodu YAZMA. Sadece interface'i implement et, summary nesnesi orchestrator'a teslim et.
 
 ### Postgres CTE snapshot — DELETE returning + SELECT order_items hatalı sonuç verir
 - **Tarih:** 2026-05-16

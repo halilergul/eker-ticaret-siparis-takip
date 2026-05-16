@@ -10,6 +10,8 @@ export type FailureMode =
   | "timeout"
   | "empty-history"
   | "cookie-banner-block"
+  | "db-write-failed"
+  | "supplier-not-found"
   | "unknown";
 
 export type ScrapeErrorOptions = {
@@ -56,6 +58,10 @@ function messageForMode(mode: FailureMode): string {
       return ERROR_MESSAGES.EMPTY_HISTORY;
     case "cookie-banner-block":
       return ERROR_MESSAGES.COOKIE_BANNER_BLOCK;
+    case "db-write-failed":
+      return "Veritabanına yazma başarısız.";
+    case "supplier-not-found":
+      return "Bilinmeyen tedarikçi (--supplier).";
     case "unknown":
     default:
       return ERROR_MESSAGES.UNKNOWN;

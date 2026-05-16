@@ -9,6 +9,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
+    "scrape": "tsx scripts/scrape/run.ts",
     "scrape:enderyapi": "tsx scripts/scrape/enderyapi.ts"
   },
   "dependencies": {

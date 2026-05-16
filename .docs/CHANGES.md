@@ -56,3 +56,28 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
   - **Değiştirilen:** `lib/supabase/client.ts`, `lib/supabase/server.ts` (`<Database>` generic eklendi)
 - **Etki analizi:** ~3 saat (spec + plan + research + tasks + code + 8 manuel QS doğrulama + 3 advisor düzeltmesi). Constitution 14/14 ✅ — bilinçli sapma yok. 002'deki G14 (migration file-versioning) düzeltildi. Authenticated role privilege eksikliği implementation sırasında yakalandı, GRANT migration ile düzeltildi (dev-gotchas'a kaydedildi).
 - **Durum:** Tamamlandı. Quickstart QS-00 → QS-08 tamamı ✅. Advisor: schema-related 0 critical (1 ek WARN `auth_leaked_password_protection` Auth Dashboard'da manuel açılır). 004 scraper artık bu schema'ya yazabilir.
+
+### CR-004 — Feature 004-enderyapi-scraper-prod tamamlandı (kısmi)
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Multi-supplier adapter mimarisi + Enderyapi adapter + DB yazma + scrape_runs audit. Spec: [specs/004-enderyapi-scraper-prod/spec.md](../specs/004-enderyapi-scraper-prod/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni klasör/dosyalar:**
+    - `lib/scraper/{types,errors,adapter-registry,supabase-writer,run-logger}.ts`
+    - `lib/scraper/adapters/enderyapi.ts` (PoC'tan adapter pattern'a port)
+    - `scripts/scrape/run.ts` (CLI orchestrator)
+  - **Yeni migration'lar:**
+    - `20260516161959_scrape_runs.sql` (audit table)
+    - `20260516202902_grant_table_privileges_to_service_role.sql` (003 sonrası eksik GRANT — service_role'e CRUD + RPC)
+  - **Değiştirilen:**
+    - `scripts/scrape/credentials.ts` — `loadCredentials(slug)` generic
+    - `scripts/scrape/errors.ts` — yeni FailureMode değerleri (`db-write-failed`, `supplier-not-found`)
+    - `scripts/scrape/enderyapi.ts` — deprecation banner
+    - `scripts/scrape/README.md` — yeni mimari + adapter ekleme rehberi
+    - `package.json` — `"scrape": "tsx scripts/scrape/run.ts"` script
+    - `lib/supabase/database.types.ts` — `scrape_runs` ile regen
+- **Etki analizi:** ~5 saat (spec + plan + research + tasks + code + manuel QS doğrulama). Constitution 14/15 ✅, 1 ⚠ G15 (credentials lokalde, 005'te GitHub Secrets'a taşınacak). Implementation sırasında 1 sürpriz: service_role'e GRANT eksikti (001'deki revoke migration'ından miras), düzeltme migration ile çözüldü ve dev-gotchas'a kaydedildi.
+- **Kısmi tamamlandı**: P1 ✅ (sipariş geçmişi DB'de, idempotent), P3 ✅ (scrape_runs audit). **P2 ertelenmiş**: katalog DOM keşfi (T022-T025) → 005 feature'a taşındı. Sebep: ürün katalog sayfası URL pattern'ı + fiyat selector'ları henüz keşfedilmedi; GitHub Actions ortamında gerçek workflow ile birlikte yapılır. T021 (login-fail test) de ertelendi (gerçek hesap kilitleme riski).
+- **Bilinen sınırlama**: `getOrderDetail` her sipariş için yalnızca 1 ürün satırı parse ediyor; muhtemelen tablo başlığı/summary satırı sayılıyor. T022 sırasında --headed mode'da düzeltilir (item parser refine).
+- **Manuel doğrulama**: QS-03 ✅ (5 sipariş 13sn'de DB'ye yazıldı), QS-04 ✅ (idempotent: 2. koşumda 0 yeni), QS-06 ✅ (scrape_runs zengin), QS-08 ✅ (zero secret leak).
+- **Durum**: Kısmi tamamlandı (US1 + US3 ✅, US2 → 005). MVP açısından çalışır: sipariş geçmişi DB'de, 006 dashboard feature artık başlayabilir.

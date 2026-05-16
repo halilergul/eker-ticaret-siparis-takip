@@ -1,6 +1,49 @@
 # scripts/scrape/
 
-CLI scrape script'leri. Şu an sadece **enderyapi PoC** (feature 002).
+CLI scrape orchestrator + helper'lar. **Feature 004**'ten itibaren multi-supplier
+adapter mimarisi (`lib/scraper/adapters/`); bu klasör orchestrator + ortak utility'leri tutar.
+
+## Kullanım (004 sonrası)
+
+```bash
+# Help
+npm run scrape -- --help
+
+# Gerçek koşum
+npm run scrape -- --supplier enderyapi
+npm run scrape -- --supplier enderyapi --verbose --limit 5
+npm run scrape -- --supplier enderyapi --skip-catalog    # P1 sadece (yeni siparişler)
+
+# Eski PoC CLI (deprecated; sadece stdout, DB yazmaz)
+npm run scrape:enderyapi    # uyarı basar, 005'te silinir
+```
+
+## Yeni adapter eklemek
+
+1. `lib/scraper/adapters/<yeni-slug>.ts` — `Adapter` interface implement et (login, listOrders, getOrderDetail, getProductPrice).
+2. `lib/scraper/adapter-registry.ts`'e `import` + `adapters[<slug>] = <yeniAdapter>`.
+3. `INSERT INTO public.suppliers (slug, name, base_url) VALUES (...)` migration veya SQL ile.
+4. `.env.local`'a `<SLUG_UPPER>_USERNAME` + `<SLUG_UPPER>_PASSWORD` ekle.
+5. `npm run scrape -- --supplier <yeni-slug>` test et.
+
+## Mimari
+
+- **Orchestrator** (`scripts/scrape/run.ts`): CLI argv parse, adapter seç, akış (login → listOrders → her detay → DB yaz → katalog enrichment), `scrape_runs` audit logging, global 5dk timeout.
+- **Adapter** (`lib/scraper/adapters/<slug>.ts`): Site-spesifik scraping (login form selector'ları, URL pattern'ları, DOM parser). DB bilmez.
+- **DB writer** (`lib/scraper/supabase-writer.ts`): `service_role` ile idempotent yazma (header, items, RPC).
+- **Run logger** (`lib/scraper/run-logger.ts`): `scrape_runs` start/success/partial/fail/abort.
+
+## Ortak utility'ler
+
+| Dosya | Amaç |
+|-------|------|
+| `constants.ts` | Site URL'leri, selector aday array'leri (PoC'tan; adapter-spesifik kısımlar yavaş yavaş adapter modülüne taşınır) |
+| `credentials.ts` | `loadCredentials(slug)` — env var convention |
+| `detection.ts` | CAPTCHA + 2FA detection |
+| `errors.ts` | `ScrapeError`, `FailureMode` enum, `formatError` |
+| `price-parse.ts` | TR locale "1.234,56 ₺" → 1234.56 |
+| `output.ts` | (legacy 002) JSON/text output formatter |
+| `enderyapi.ts` | **DEPRECATED** — 002 PoC standalone CLI; 005'te silinir |
 
 ## İlk kurulum
 
