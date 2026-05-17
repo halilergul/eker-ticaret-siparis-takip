@@ -26,10 +26,11 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       SUPPLIER: ${{ github.event.inputs.supplier || 'enderyapi' }}
       TRIGGER_TYPE: ${{ github.event.inputs.trigger_type || (github.event_name == 'schedule' && 'auto' || 'manual') }}
+      TIMEOUT_OVERRIDE_MS: '480000'  # 8 dk — runner'da Playwright + network yavaş, 5dk default yetmiyor (36+ ürün)
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ENDERYAPI_USERNAME: ${{ secrets.ENDERYAPI_USERNAME }}
@@ -62,4 +63,4 @@ jobs:
 
       - name: Run catalog scrape
         if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
-        run: npm run scrape:catalog -- --supplier "$SUPPLIER"
+        run: npm run scrape:catalog -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"

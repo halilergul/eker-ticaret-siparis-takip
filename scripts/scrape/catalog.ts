@@ -34,6 +34,8 @@ dotenv.config({ path: ".env.local" });
 
 const GLOBAL_TIMEOUT_MS = Number(process.env.TIMEOUT_OVERRIDE_MS) || 5 * 60 * 1000;
 
+type TriggerType = "auto" | "manual" | "unknown";
+
 type Args = {
   supplier?: string;
   headed: boolean;
@@ -42,17 +44,25 @@ type Args = {
   onlyStaleHours?: number;
   productCode?: string;
   help: boolean;
+  triggerType: TriggerType;
 };
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { headed: false, verbose: false, help: false };
+  const args: Args = { headed: false, verbose: false, help: false, triggerType: "unknown" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") args.help = true;
     else if (a === "--headed") args.headed = true;
     else if (a === "--verbose" || a === "-v") args.verbose = true;
     else if (a === "--supplier") args.supplier = argv[++i];
-    else if (a === "--limit") {
+    else if (a === "--trigger-type") {
+      const value = argv[++i] ?? "";
+      if (value !== "auto" && value !== "manual" && value !== "unknown") {
+        console.error(`[catalog] --trigger-type geçersiz: ${value} (auto|manual|unknown bekleniyor)`);
+        process.exit(2);
+      }
+      args.triggerType = value;
+    } else if (a === "--limit") {
       args.limit = parseInt(argv[++i] ?? "", 10);
       if (!Number.isFinite(args.limit) || args.limit <= 0) {
         console.error(`[catalog] --limit geçersiz: ${argv[i]}`);
@@ -203,7 +213,7 @@ async function runCatalog(args: Args): Promise<void> {
     `[catalog] ${targets.length} ürün scrape edilecek (${cachedCount} cached URL, ${targets.length - cachedCount} search gerekecek)`,
   );
 
-  const runId = await startRun(supplierId);
+  const runId = await startRun(supplierId, args.triggerType);
   const summary = emptySummary();
   const debugDir = path.join("scrape-debug", runId);
   let browser: Browser | null = null;
@@ -251,7 +261,8 @@ async function runCatalog(args: Args): Promise<void> {
 
     for (const r of results) {
       if (Date.now() - startTime > GLOBAL_TIMEOUT_MS) {
-        console.error("[catalog] Global timeout (5dk) — duruyorum");
+        const timeoutMin = Math.round(GLOBAL_TIMEOUT_MS / 60_000);
+        console.error(`[catalog] Global timeout (${timeoutMin}dk) — duruyorum`);
         break;
       }
 
