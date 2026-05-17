@@ -26,9 +26,9 @@ function formatNextRun(date: Date | null): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "Europe/Istanbul",
   });
-  return `Sonraki otomatik scrape: ${formatter.format(date)} UTC`;
+  return `Sonraki otomatik scrape: ${formatter.format(date)} (Türkiye saati)`;
 }
 
 export function SupplierScheduleCard({ schedule }: Props) {
