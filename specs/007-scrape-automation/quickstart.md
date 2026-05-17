@@ -40,13 +40,13 @@ Vercel dashboard > Project > Settings > Environment Variables:
 
 | Variable | Environment | Değer |
 |----------|-------------|-------|
-| `GITHUB_PAT` | Production, Preview | Fine-grained PAT (scope: `Actions: Read and write`, sadece `eker-ticaret` repo) |
+| `GITHUB_PAT` | Production, Preview | Fine-grained PAT (scope: `Actions: Read and write`, sadece `eker-ticaret-siparis-takip` repo) |
 | `GITHUB_OWNER` | Production, Preview | `halilergul` |
-| `GITHUB_REPO` | Production, Preview | `eker-ticaret` |
+| `GITHUB_REPO` | Production, Preview | `eker-ticaret-siparis-takip` |
 
 PAT nasıl oluşturulur:
 1. GitHub > Settings > Developer settings > Personal access tokens > Fine-grained tokens > Generate new token
-2. Repository access: **Only select repositories** > `eker-ticaret`
+2. Repository access: **Only select repositories** > `eker-ticaret-siparis-takip`
 3. Repository permissions: **Actions: Read and write**
 4. Expiration: 90 gün (önerilir, rotasyon planı için)
 
