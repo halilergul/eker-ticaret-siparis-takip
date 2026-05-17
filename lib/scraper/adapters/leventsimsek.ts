@@ -32,7 +32,6 @@ import {
   ORDER_HISTORY_PATHS,
   LOGIN_SELECTORS,
   ORDER_LIST_SELECTORS,
-  ORDER_DETAIL_SELECTORS,
   TIMEOUTS,
 } from "./leventsimsek.constants";
 
@@ -74,19 +73,6 @@ async function saveDebugScreenshot(
 
 function vlog(ctx: ScrapeContext, msg: string): void {
   if (ctx.verbose) process.stderr.write(`[leventsimsek] ${msg}\n`);
-}
-
-function parseTrDate(text: string): string | null {
-  const m = text.match(/(\d{2})[./-](\d{2})[./-](\d{4})/);
-  if (m) {
-    const [, d, mo, y] = m;
-    return `${y}-${mo}-${d}T00:00:00Z`;
-  }
-  const iso = text.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) {
-    return `${iso[1]}-${iso[2]}-${iso[3]}T00:00:00Z`;
-  }
-  return null;
 }
 
 // "29 Ara 2025 14:49" → "2025-12-29T14:49:00Z" (TR uzun tarih → ISO)
@@ -247,13 +233,13 @@ async function login(ctx: ScrapeContext): Promise<void> {
         const username = args[2] as string;
         const password = args[3] as string;
         document.querySelectorAll(uSel).forEach((el) => {
-          const inp = el as any;
+          const inp = el as HTMLInputElement;
           inp.value = username;
           inp.dispatchEvent(new Event("input", { bubbles: true }));
           inp.dispatchEvent(new Event("change", { bubbles: true }));
         });
         document.querySelectorAll(pSel).forEach((el) => {
-          const inp = el as any;
+          const inp = el as HTMLInputElement;
           inp.value = password;
           inp.dispatchEvent(new Event("input", { bubbles: true }));
           inp.dispatchEvent(new Event("change", { bubbles: true }));
@@ -271,7 +257,7 @@ async function login(ctx: ScrapeContext): Promise<void> {
     } catch {
       vlog(ctx, "Normal click başarısız, requestSubmit() fallback");
       await page.evaluate((pSel: string) => {
-        const pwd = document.querySelector(pSel) as any;
+        const pwd = document.querySelector(pSel) as HTMLInputElement | null;
         if (pwd && pwd.form) {
           if (typeof pwd.form.requestSubmit === "function") {
             pwd.form.requestSubmit();
