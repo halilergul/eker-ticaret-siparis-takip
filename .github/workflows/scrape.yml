@@ -60,9 +60,9 @@ jobs:
         run: npx tsx scripts/scrape/check-schedule.ts --supplier "$SUPPLIER"
 
       - name: Install Playwright Chromium
-        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
+        if: github.event_name == 'workflow_dispatch' || steps.check.outputs.skip == 'false'
         run: npx playwright install --with-deps chromium
 
       - name: Run scrape (order + catalog combined)
-        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
+        if: github.event_name == 'workflow_dispatch' || steps.check.outputs.skip == 'false'
         run: npm run scrape:all -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"
