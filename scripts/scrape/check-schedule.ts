@@ -1,28 +1,63 @@
 #!/usr/bin/env tsx
 /**
- * Cron hour-gating script (feature 007).
+ * Cron hour-gating script (feature 007, refactored 009).
  *
  * Kullanım:
  *   tsx scripts/scrape/check-schedule.ts --supplier <slug>
  *
- * Exit codes:
- *   0  → continue (scrape can run)
- *   78 → skip (toggle off OR hour mismatch)
- *   1  → error (env missing, db error)
+ * Exit code:
+ *   0 → her zaman (true skip ya da true continue). GitHub Actions Step failure'ını önlemek için.
  *
- * GitHub Actions workflow ilk step olarak çağırır. Sonraki step'ler
- * `if: steps.check.outcome == 'success'` gate'lenir.
+ * Output (GITHUB_OUTPUT):
+ *   skip=true   → workflow sonraki step'leri atlamalı (toggle off, hour mismatch, schedule missing)
+ *   skip=false  → workflow scrape'i çalıştırmalı (enabled + hour match)
+ *
+ * NEDEN: Eski sürüm exit 78 (skip) dönerdi; GitHub Actions 2020 sonrası 78'i "neutral skip"
+ * olarak değil "failure" olarak yorumluyor → workflow Failed → saatlik mail spam. Şimdi her
+ * zaman 0 ile çıkıp output ile gate ediyoruz; saatlik cron'lar başarısız görünmez.
+ *
+ * Workflow YAML şu pattern'i kullanmalı:
+ *   if: github.event_name == 'workflow_dispatch' || steps.check.outputs.skip == 'false'
  */
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import { appendFileSync } from "node:fs";
 
 import type { Database } from "@/lib/supabase/database.types";
 
 dotenv.config({ path: ".env.local" });
 
-const EXIT_CONTINUE = 0;
-const EXIT_ERROR = 1;
-const EXIT_SKIP = 78;
+/**
+ * GITHUB_OUTPUT'a key=value yazar. Lokal çalıştırıldığında no-op.
+ */
+function writeOutput(key: string, value: string): void {
+  const file = process.env.GITHUB_OUTPUT;
+  if (!file) return;
+  try {
+    appendFileSync(file, `${key}=${value}\n`);
+  } catch (err) {
+    console.error(`[check-schedule] GITHUB_OUTPUT yazılamadı: ${String(err)}`);
+  }
+}
+
+function emitSkip(reason: string): never {
+  console.log(`[check-schedule] SKIP: ${reason}`);
+  writeOutput("skip", "true");
+  process.exit(0);
+}
+
+function emitContinue(reason: string): never {
+  console.log(`[check-schedule] CONTINUE: ${reason}`);
+  writeOutput("skip", "false");
+  process.exit(0);
+}
+
+function emitError(reason: string): never {
+  console.error(`[check-schedule] ERROR: ${reason}`);
+  // Hata durumunda skip=true → workflow run'ı bozmayalım, scrape'i atlayalım
+  writeOutput("skip", "true");
+  process.exit(0);
+}
 
 function parseArgs(argv: string[]): { supplier?: string } {
   const out: { supplier?: string } = {};
@@ -35,61 +70,52 @@ function parseArgs(argv: string[]): { supplier?: string } {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (!args.supplier) {
-    console.error("[check-schedule] --supplier zorunlu");
-    process.exit(EXIT_ERROR);
+    emitError("--supplier zorunlu");
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    console.error(
-      "[check-schedule] NEXT_PUBLIC_SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY eksik",
-    );
-    process.exit(EXIT_ERROR);
+    emitError("NEXT_PUBLIC_SUPABASE_URL veya SUPABASE_SERVICE_ROLE_KEY eksik");
   }
 
-  const supabase = createClient<Database>(url, key, {
+  const supabase = createClient<Database>(url!, key!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
   const { data, error } = await supabase
     .from("scrape_schedule")
     .select("enabled, daily_hour_utc, suppliers!inner(slug)")
-    .eq("suppliers.slug", args.supplier)
+    .eq("suppliers.slug", args.supplier!)
     .maybeSingle();
 
   if (error) {
-    console.error(`[check-schedule] db error: ${error.message}`);
-    process.exit(EXIT_ERROR);
+    emitError(`db error: ${error.message}`);
   }
 
   if (!data) {
-    console.error(
-      `[check-schedule] supplier='${args.supplier}' için scrape_schedule satırı yok`,
-    );
-    process.exit(EXIT_SKIP);
+    emitSkip(`supplier='${args.supplier}' için scrape_schedule satırı yok`);
   }
 
   if (!data.enabled) {
-    console.log(`[check-schedule] supplier=${args.supplier} disabled → skip`);
-    process.exit(EXIT_SKIP);
+    emitSkip(`supplier=${args.supplier} disabled`);
   }
 
   const currentUtcHour = new Date().getUTCHours();
   if (data.daily_hour_utc !== currentUtcHour) {
-    console.log(
-      `[check-schedule] supplier=${args.supplier} hour=${data.daily_hour_utc} != current=${currentUtcHour} → skip`,
+    emitSkip(
+      `supplier=${args.supplier} hour=${data.daily_hour_utc} != current=${currentUtcHour}`,
     );
-    process.exit(EXIT_SKIP);
   }
 
-  console.log(
-    `[check-schedule] supplier=${args.supplier} hour matches (UTC=${currentUtcHour}) → continue`,
+  emitContinue(
+    `supplier=${args.supplier} hour matches (UTC=${currentUtcHour})`,
   );
-  process.exit(EXIT_CONTINUE);
 }
 
 main().catch((err) => {
   console.error("[check-schedule] unexpected error", err);
-  process.exit(EXIT_ERROR);
+  // Catch-all: skip ile çık, workflow bozulmasın
+  writeOutput("skip", "true");
+  process.exit(0);
 });
