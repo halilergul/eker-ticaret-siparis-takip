@@ -14,7 +14,7 @@ export type TriggerErrorCode =
   | "INTERNAL_ERROR";
 
 export type TriggerScrapeResult =
-  | { ok: true; runId: string; message: string }
+  | { ok: true; message: string }
   | { ok: false; code: TriggerErrorCode; message: string };
 
 const ERROR_MESSAGES: Record<TriggerErrorCode, string> = {
@@ -86,30 +86,10 @@ export async function triggerScrape(
     return fail("GITHUB_API_FAILED");
   }
 
-  const { data: inserted, error: insertError } = await supabase
-    .from("scrape_runs")
-    .insert({
-      supplier_id: supplier.id,
-      status: "running",
-      trigger_type: "manual",
-      summary: {},
-    })
-    .select("id")
-    .single();
-
-  if (insertError || !inserted) {
-    console.error(
-      "[trigger-scrape] scrape_runs insert failed",
-      insertError?.message,
-    );
-    return fail("INTERNAL_ERROR");
-  }
-
   revalidatePath("/dashboard/settings");
 
   return {
     ok: true,
-    runId: inserted.id,
     message: "Tetiklendi — sonuç birkaç dakika içinde görünür.",
   };
 }
