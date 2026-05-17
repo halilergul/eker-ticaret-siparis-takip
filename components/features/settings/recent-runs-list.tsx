@@ -82,13 +82,30 @@ function RunRow({ run }: { run: ScrapeRunRow }) {
   );
 }
 
+function formatCount(
+  label: string,
+  inserted: number,
+  skipped: number,
+): string | null {
+  if (inserted === 0 && skipped === 0) return null;
+  if (skipped === 0) return `${inserted} ${label}`;
+  if (inserted === 0) return `0 yeni · ${skipped} mevcut ${label}`;
+  return `${inserted} yeni · ${skipped} mevcut ${label}`;
+}
+
 function RunSummary({ run }: { run: ScrapeRunRow }) {
   if (run.status === "running") {
     return <span className="text-stone-500">Devam ediyor…</span>;
   }
   const parts: string[] = [];
-  if (run.ordersInserted > 0) parts.push(`${run.ordersInserted} sipariş`);
-  if (run.itemsInserted > 0) parts.push(`${run.itemsInserted} satır`);
+  const orderText = formatCount(
+    "sipariş",
+    run.ordersInserted,
+    run.ordersSkipped,
+  );
+  const itemText = formatCount("satır", run.itemsInserted, run.itemsSkipped);
+  if (orderText) parts.push(orderText);
+  if (itemText) parts.push(itemText);
   if (run.snapshotsAdded > 0) parts.push(`${run.snapshotsAdded} snapshot`);
   if (run.errorsCount > 0) parts.push(`${run.errorsCount} hata`);
   if (parts.length === 0) return <span className="text-stone-400">—</span>;
