@@ -142,3 +142,21 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Backend / Supabase JS
 - **Detay:** PostgREST `SELECT DISTINCT col FROM table` yapmıyor; `.select("col")` her satır için satır döner. Filter dropdown'ları için distinct değer listesi gerekirken bu sınırlama can sıkar.
 - **Çözüm/Önlem:** Küçük tablo (< ~5000 satır) için: tüm değerleri çek, JS'te `new Set()` ile tekleştir + `Array.from(set).sort()`. 005'te `listDistinctStatuses()` bu deseni kullanıyor. Büyüme noktası: bir RPC fonksiyonu (`get_distinct_statuses()`) veya materialized view tanımla.
+
+### Schema reality vs spec — kolon adları doğrula
+- **Tarih:** 2026-05-17
+- **Konu:** Backend / Supabase
+- **Detay:** 006 implementasyonunda iki sürpriz çıktı: (1) `price_snapshots` tablosunda `observed_at` değil **`captured_at`** kolonu var (data-model.md'de yanlış yazıldı); (2) `products` tablosunda **`brand` kolonu hiç yoktu**. Spec doküman planlanan schema'yı varsayıyordu ama gerçek 003 migration farklı isimlendirme + alanlar kullanmıştı.
+- **Çözüm/Önlem:** Migration yazmadan / RPC SQL kurmadan önce **gerçek DB schema'sını teyit et**: `mcp__supabase__execute_sql("SELECT column_name FROM information_schema.columns WHERE table_name='X' ORDER BY ordinal_position;")`. data-model.md "planlanan" şeklini gösterir; gerçek schema "what is" durumunu. Faz 1 setup task'larından biri **schema diff** kontrolü olmalı.
+
+### Next.js 15 + ESLint `react/no-unescaped-entities` JSX'te apostrof yasaklıyor
+- **Tarih:** 2026-05-17
+- **Konu:** Frontend / Next.js 15 / ESLint
+- **Detay:** JSX text içinde `'` (apostrof) doğrudan yazmak (`snapshot'ı`, `kataloğundan'a`) `react/no-unescaped-entities` ESLint hatası verir; `next build` durur. Türkçe metinlerde sık karşılaşılır.
+- **Çözüm/Önlem:** `&apos;` veya `&#39;` ile escape et: `snapshot&apos;ı`. JS template literal içinde (`{` `}`) bu kural çalışmaz, sadece JSX text. Alternatif: kuralı eslintrc'de kapat (önerilmez).
+
+### PostgreSQL RPC pencere fonksiyonu — ürün başına eski/yeni snapshot
+- **Tarih:** 2026-05-17
+- **Konu:** Backend / Postgres
+- **Detay:** "Son N gün içinde fiyatı değişen ürünleri listele" sorgusunda her ürün için iki snapshot karşılaştırılması gerek (pencerenin başındaki + sonundaki). Naif yaklaşım her ürün için iki ayrı query (n+1 problemi) veya tüm snapshot'ları JS'e çek + grupla (transfer + memory). En temiz yol: `ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY captured_at ASC/DESC)` ile CTE'de `rn=1 (latest)` + `rn=1 ASC (oldest)` projection.
+- **Çözüm/Önlem:** 006'da `get_price_changes(window_days)` RPC fonksiyonu bu deseni kullanıyor — bkz. `supabase/migrations/<ts>_create_get_price_changes_rpc.sql`. `SECURITY INVOKER + SET search_path = public, pg_temp` zorunlu (003/004 deseni).

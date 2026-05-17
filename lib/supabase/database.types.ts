@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -19,6 +21,7 @@ export type Database = {
           id: string
           order_id: string
           product_code: string
+          product_id: string | null
           product_name: string
           quantity: number
           unit_price_at_order: number
@@ -30,6 +33,7 @@ export type Database = {
           id?: string
           order_id: string
           product_code: string
+          product_id?: string | null
           product_name: string
           quantity: number
           unit_price_at_order: number
@@ -41,6 +45,7 @@ export type Database = {
           id?: string
           order_id?: string
           product_code?: string
+          product_id?: string | null
           product_name?: string
           quantity?: number
           unit_price_at_order?: number
@@ -54,6 +59,13 @@ export type Database = {
             referencedRelation: "supplier_orders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       price_snapshots: {
@@ -61,25 +73,40 @@ export type Database = {
           captured_at: string
           created_at: string
           currency: string
+          discount_text: string | null
           id: string
+          list_price: number | null
           product_id: string
+          source: string
           unit_price: number
+          unit_price_with_vat: number | null
+          vat_rate: number | null
         }
         Insert: {
           captured_at?: string
           created_at?: string
           currency?: string
+          discount_text?: string | null
           id?: string
+          list_price?: number | null
           product_id: string
+          source?: string
           unit_price: number
+          unit_price_with_vat?: number | null
+          vat_rate?: number | null
         }
         Update: {
           captured_at?: string
           created_at?: string
           currency?: string
+          discount_text?: string | null
           id?: string
+          list_price?: number | null
           product_id?: string
+          source?: string
           unit_price?: number
+          unit_price_with_vat?: number | null
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -93,6 +120,8 @@ export type Database = {
       }
       products: {
         Row: {
+          brand: string | null
+          catalog_url: string | null
           code: string
           created_at: string
           currency: string
@@ -102,8 +131,11 @@ export type Database = {
           name: string
           supplier_id: string
           updated_at: string
+          vat_rate: number
         }
         Insert: {
+          brand?: string | null
+          catalog_url?: string | null
           code: string
           created_at?: string
           currency?: string
@@ -113,8 +145,11 @@ export type Database = {
           name: string
           supplier_id: string
           updated_at?: string
+          vat_rate?: number
         }
         Update: {
+          brand?: string | null
+          catalog_url?: string | null
           code?: string
           created_at?: string
           currency?: string
@@ -124,6 +159,7 @@ export type Database = {
           name?: string
           supplier_id?: string
           updated_at?: string
+          vat_rate?: number
         }
         Relationships: [
           {
@@ -255,6 +291,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_price_changes: {
+        Args: { include_drops?: boolean; window_days?: number }
+        Returns: {
+          brand: string
+          change_amount: number
+          change_pct: number
+          last_order_at: string
+          last_order_id: string
+          last_order_no: string
+          new_observed_at: string
+          new_price: number
+          old_observed_at: string
+          old_price: number
+          product_code: string
+          product_id: string
+          product_name: string
+          supplier_slug: string
+        }[]
+      }
       record_price_observation: {
         Args: {
           p_captured_at?: string

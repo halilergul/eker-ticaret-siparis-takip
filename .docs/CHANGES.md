@@ -101,3 +101,46 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 - **Constitution gates**: 15/15 ✅, G15 hâlâ ⚠ (credentials lokal — 008 GitHub Actions migrasyonunda kapanır; bu feature secret'lara dokunmuyor).
 - **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard` 107 kB, `/dashboard/orders/[id]` 106 kB First Load JS); advisor'larda 005 kaynaklı yeni bulgu yok (önceki state korunuyor).
 - **Durum**: Kod tamam, manuel QS-01 → QS-10 (browser) kullanıcı doğrulamasına hazır.
+
+### CR-006 — Feature 006-price-changes-dashboard tamamlandı (kod scaffolding)
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Catalog scrape + KDV-aware price tracking + zamlanan ürünler dashboard'u. Spec: [specs/006-price-changes-dashboard/spec.md](../specs/006-price-changes-dashboard/spec.md). 005'in temelinden besleniyor; takip değişkeni **KDV dahil özel birim fiyat** olarak netleşti.
+- **Etkilenen dosyalar:**
+  - **Yeni migration'lar:**
+    - `add_vat_rate_to_products` — products.vat_rate NUMERIC(5,4) NOT NULL DEFAULT 0.20
+    - `extend_price_snapshots_with_components` — price_snapshots'a 5 yeni kolon (unit_price_with_vat, list_price, discount_text, vat_rate, source)
+    - `add_product_id_to_order_items` — order_items.product_id FK products(id); ürün-sipariş cross-link için
+    - `add_brand_to_products` — products.brand TEXT (ek bulgu: 003'te yoktu)
+    - `create_get_price_changes_rpc` — PL/SQL window function ürün başına eski/yeni karşılaştırma
+  - **Yeni:**
+    - `lib/format/percent.ts` — formatTrPercent (signed +%X,Y)
+    - `lib/constants/price-changes.ts` — DEFAULT_DAYS_WINDOW, MAX_DAYS_WINDOW, DAYS_PRESETS
+    - `lib/validations/price-changes-filter.ts` — zod + parsePriceChangesFilter
+    - `lib/queries/{price-changes,products}.ts` — listPriceChanges (RPC), getProductById, listProductSnapshots (JS pencere hesabı), listProductOrders
+    - `components/features/price-changes/{window-filter,price-change-row,price-change-table,price-changes-empty-state,sparkline,product-header-card,product-history-table,product-orders-list}.tsx`
+    - `components/ui/top-bar-nav.tsx` — Siparişler / Zamlananlar nav
+    - `app/(app)/dashboard/price-changes/page.tsx`
+    - `app/(app)/dashboard/products/[id]/page.tsx`
+    - `scripts/scrape/catalog.ts` — CLI orchestrator (--supplier, --product-code, --limit, --only-stale, --headed)
+  - **Değiştirilen:**
+    - `lib/routes.ts` — PRICE_CHANGES + PRODUCT_DETAIL
+    - `lib/queries/orders.ts` — `OrderDetailItem.productId` eklendi (cross-link için)
+    - `components/features/orders/order-detail-card.tsx` — item satırlarında productId varsa ürün detayına link
+    - `components/ui/top-bar.tsx` — TopBarNav entegrasyonu + logo link
+    - `lib/scraper/types.ts` — Adapter.scrapeCatalog method + CatalogScrapeResult tipi
+    - `lib/scraper/adapters/enderyapi.ts` — scrapeCatalog impl (URL pattern candidate'ları + label-based field extraction)
+    - `lib/scraper/supabase-writer.ts` — ensureProduct (UPSERT + order_items.product_id back-fill) + writePriceSnapshot
+    - `scripts/scrape/errors.ts` — yeni FailureMode değerleri (catalog-parse-failed, product-not-found, vat-rate-missing)
+    - `lib/supabase/database.types.ts` — regen (yeni kolonlar + RPC)
+    - `package.json` — `scrape:catalog` script
+- **Mimari kararlar:**
+  - **KDV dahil özel birim fiyat = canonical tracking variable** (memory'de project-eker-vat-pricing-model).
+  - 005'in Server Component default deseni; sadece WindowFilter Client (URL search params + useTransition).
+  - Sparkline native SVG (50 satırlık component) — 3rd-party chart lib yok.
+  - RPC `get_price_changes(window_days, include_drops)` SQL pencere fonksiyonu — UI tek çağrı.
+  - Snapshot history (ürün detay) JS pencere hesabı (R-008) — ürün başına az veri için RPC overkill.
+- **Etki analizi:** ~7 saat (spec + plan + research + tasks + code). Constitution gates 13/15 ✅, 2 ⚠ (G13 bilinçli RPC kullanımı, G15 hâlâ açık → 008). Implementation sırasında 2 sürpriz: (1) 003 schema'da `price_snapshots.captured_at` (data-model'da `observed_at` yazılmıştı) — RPC SQL'de düzeltildi; (2) `products.brand` kolonu hiç yoktu — ek migration eklendi. 45 task'tan 30+ kod task'ı tamam; manuel browser/CLI QS (T020, T028, T035-T037, T038-T039) kullanıcı testine bırakıldı.
+- **Bilinen kısıtlama**: Enderyapı catalog URL pattern'ı + DOM selector'ları **henüz keşfedilmedi** — adapter'da 4 candidate URL ve label-based xpath extraction var. Kullanıcı `npm run scrape:catalog -- --supplier enderyapi --product-code "118 049" --headed --verbose` ile iteratif test ederek selector'ları doğrulayacak.
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard/price-changes` 107 kB, `/dashboard/products/[id]` 106 kB First Load JS); advisor'larda yeni SECURITY uyarısı yok (sadece INFO `order_items_product_id_idx unused`, catalog scrape backfill sonrası dolacak).
+- **Durum**: Kod scaffolding tamam, **catalog DOM keşfi + manuel QS** kullanıcı eylemine bağlı.

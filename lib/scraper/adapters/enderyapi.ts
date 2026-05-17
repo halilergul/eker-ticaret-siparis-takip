@@ -26,6 +26,8 @@ import { parseTrPrice } from "@/scripts/scrape/price-parse";
 import { ScrapeError, type FailureMode } from "../errors";
 import type {
   Adapter,
+  CatalogScrapeResult,
+  CatalogScrapeTarget,
   RawOrderDetail,
   RawOrderItem,
   RawOrderSummary,
@@ -451,6 +453,9 @@ async function getOrderDetail(
       const cleanCells = cells.map((c) => c.trim()).filter((c) => c.length > 0);
       if (cleanCells.length < 3) continue;
 
+      // Catalog URL bayipro DOM'unda anchor'da href yok (Vue @click). Pass 2'de tıkla.
+      const catalogUrl: string | null = null;
+
       // Heuristik:
       //  - product_code: ilk metin-hücre, alfanumerik
       //  - product_name: ikinci uzun metin hücre
@@ -505,13 +510,69 @@ async function getOrderDetail(
         productName,
         quantity,
         unitPriceAtOrder,
+        catalogUrl,
       });
+      if (catalogUrl) {
+        vlog(ctx, `  ↳ ${productCode} catalog link: ${catalogUrl}`);
+      }
     } catch (err) {
       vlog(ctx, `Detail satır ${i + 1} hata: ${String(err).slice(0, 100)}`);
     }
   }
 
   vlog(ctx, `${items.length} ürün satırı parse edildi (orderNo=${order.orderNo})`);
+
+  // Pass 2: catalog URL keşfi (anchor click + URL capture + goBack)
+  // Sipariş detay sayfasında ürün adı anchor'unda href yok (Vue @click).
+  // Her satır için tıkla, ürün detay URL'sini al, geri dön.
+  for (let i = 0; i < items.length; i++) {
+    const currentItem = items[i];
+    if (!currentItem || currentItem.catalogUrl) continue;
+
+    try {
+      // goBack sonrası rows[] stale olabilir; her seferinde fresh locate et
+      const freshRows = await page.locator(itemRowSelector).all();
+      const freshRow = freshRows[i];
+      if (!freshRow) continue;
+
+      const anchor = freshRow.locator(`.bs-pt-name a, a[title]`).first();
+      if ((await anchor.count()) === 0) {
+        vlog(ctx, `  ↳ ${currentItem.productCode} anchor bulunamadı`);
+        continue;
+      }
+
+      const beforeUrl = page.url();
+      await anchor.click({ timeout: 3000 });
+      await page
+        .waitForURL(/-p-\d+/, { timeout: 8000 })
+        .catch(() => undefined);
+      const afterUrl = page.url();
+
+      if (afterUrl !== beforeUrl && /-p-\d+/.test(afterUrl)) {
+        currentItem.catalogUrl = afterUrl;
+        vlog(ctx, `  ↳ ${currentItem.productCode} catalog: ${afterUrl}`);
+      } else {
+        vlog(
+          ctx,
+          `  ↳ ${currentItem.productCode} click sonrası URL değişmedi (before=${beforeUrl}, after=${afterUrl})`,
+        );
+      }
+
+      // Geri dön — sipariş detay sayfasına dönmek için
+      if (afterUrl !== beforeUrl) {
+        await page
+          .goBack({ waitUntil: "networkidle", timeout: 10000 })
+          .catch(() => undefined);
+        await page.waitForTimeout(500);
+      }
+    } catch (err) {
+      vlog(
+        ctx,
+        `  ↳ ${currentItem.productCode} URL discovery fail: ${err instanceof Error ? err.message.slice(0, 120) : err}`,
+      );
+    }
+  }
+
   return { summary: order, items };
 }
 
@@ -519,13 +580,403 @@ async function getProductPrice(
   ctx: ScrapeContext,
   productCode: string,
 ): Promise<number | null> {
-  // US2 — T022 (katalog DOM keşfi) ve T023 (selector + parse) gerektirir.
-  // Şimdilik null döndürüyoruz (orchestrator NULL'da snapshot yazmaz).
+  // Eski PoC method'u. 006'dan itibaren scrapeCatalog kullanılır.
   vlog(
     ctx,
-    `getProductPrice(${productCode}): henüz keşfedilmemiş katalog URL'i, NULL döndürülüyor (T022/T023 scope)`,
+    `getProductPrice(${productCode}) deprecated — scrapeCatalog kullanın`,
   );
   return null;
+}
+
+// Enderyapı catalog URL pattern: /tr/<slug>-p-<numeric-id>
+// Bu pattern ürün kodundan (örn. "118 049") doğrudan üretilemez — bağ kurulamıyor.
+// İlk keşifte site search kullanılır, sonuç URL'i products.catalog_url'a cache'lenir.
+
+// Enderyapı (bayipro.com platform) — DOM yapısı CSS class id'li hücreler.
+// Sayfa HTML'inde her field şu yapıda:
+//   <X title="Liste Fiyatı" class="normalprice-id Cell">VALUE</X>
+//   <X title="KDV'siz Net Fiyat" class="price-id Cell">VALUE</X>
+//   <X title="KDV" class="tax-id Cell">VALUE</X>
+//   <X title="İskonto" class="discount-id Cell">VALUE</X>
+//   <X class="stock-id stock-id_<id>_0 Cell">VALUE</X>
+const FIELD_CSS = {
+  listPrice: ".normalprice-id",
+  netExclVat: ".price-id",
+  vat: ".tax-id",
+  discount: ".discount-id",
+  stock: ".stock-id",
+} as const;
+
+function parsePriceFromLabel(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  return parseTrPrice(raw);
+}
+
+function parseVatRate(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const m = raw.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  if (!m) return null;
+  const pct = Number(m[1]!.replace(",", "."));
+  return Number.isFinite(pct) ? pct / 100 : null;
+}
+
+async function findFieldValue(
+  ctx: ScrapeContext,
+  labels: readonly string[],
+  pageText?: string,
+): Promise<string | null> {
+  // Strategy 1: Full page text + regex (most robust against custom DOM)
+  if (pageText) {
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const patterns = [
+        // "Label: value" or "Label\nvalue"
+        new RegExp(
+          `${escaped}\\s*[:\\n]\\s*([+\\-]?[0-9][0-9.,%+\\-\\s]*(?:TL|₺|%)?)`,
+          "i",
+        ),
+        // "Label   value" (multiple whitespace, single line)
+        new RegExp(`${escaped}\\s{2,}([+\\-]?[0-9][0-9.,%+\\-\\s]*)`, "i"),
+        // Marka için harf değer (Liste Fiyatı/KDV'siz Net Fiyat için çalışmaz):
+        new RegExp(`${escaped}\\s*[:\\n]\\s*([A-Za-zÀ-ÿ0-9][^\\n]{0,40})`, "i"),
+      ];
+      for (const pat of patterns) {
+        const m = pageText.match(pat);
+        if (m && m[1]) {
+          const val = m[1].trim().split("\n")[0]!.trim();
+          if (val && val.length > 0 && val.length < 80) return val;
+        }
+      }
+    }
+  }
+
+  // Strategy 2: xpath fallback
+  for (const label of labels) {
+    const xpathQueries = [
+      `//td[normalize-space()="${label}"]/following-sibling::td[1]`,
+      `//dt[normalize-space()="${label}"]/following-sibling::dd[1]`,
+      `//*[normalize-space(text())="${label}" or normalize-space(text())="${label}:"]/following-sibling::*[1]`,
+      `//*[contains(normalize-space(.), "${label}")]/following-sibling::*[1]`,
+    ];
+    for (const q of xpathQueries) {
+      try {
+        const value = await ctx.page
+          .locator(`xpath=${q}`)
+          .first()
+          .textContent({ timeout: 1000 });
+        if (value?.trim()) return value.trim();
+      } catch {
+        // try next
+      }
+    }
+  }
+  return null;
+}
+
+async function dumpPageHtml(
+  ctx: ScrapeContext,
+  productCode: string,
+): Promise<string | null> {
+  try {
+    const html = await ctx.page.content();
+    const safeName = productCode.replace(/[^a-zA-Z0-9_-]/g, "_");
+    await fs.mkdir(ctx.debugDir, { recursive: true });
+    const filePath = path.join(ctx.debugDir, `catalog-${safeName}.html`);
+    await fs.writeFile(filePath, html, "utf-8");
+    return filePath;
+  } catch {
+    return null;
+  }
+}
+
+async function navigateDirect(
+  ctx: ScrapeContext,
+  url: string,
+): Promise<boolean> {
+  vlog(ctx, `catalog: direct nav → ${url}`);
+  try {
+    const response = await ctx.page.goto(url, {
+      waitUntil: "networkidle",
+      timeout: 25000,
+    });
+    if (!response || response.status() === 404) {
+      vlog(ctx, `catalog: response ${response?.status() ?? "null"}`);
+      return false;
+    }
+
+    // Vue/Nuxt SPA — content lazy render. Birkaç olası field label'ından
+    // herhangi biri görünene kadar bekle (max 20sn).
+    const FIELD_INDICATORS = [
+      "KDV'siz Net Fiyat",
+      "KDVsiz Net Fiyat",
+      "Liste Fiyatı",
+      "Liste Fiyati",
+      "Ürün Kodu",
+      "Stok",
+    ];
+    const orXpath = FIELD_INDICATORS.map(
+      (label) => `contains(normalize-space(.), "${label}")`,
+    ).join(" or ");
+    try {
+      await ctx.page
+        .locator(`xpath=//*[${orXpath}]`)
+        .first()
+        .waitFor({ timeout: 20000, state: "attached" });
+      vlog(ctx, `catalog: field indicator render oldu`);
+    } catch {
+      vlog(ctx, `catalog: 20sn içinde hiçbir field indicator gelmedi`);
+    }
+
+    // Scroll down + up — intersection observer / lazy-load tetiklemek için
+    await ctx.page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await ctx.page.waitForTimeout(800);
+    await ctx.page.evaluate(() => window.scrollTo(0, 0));
+    await ctx.page.waitForTimeout(800);
+
+    return true;
+  } catch (err) {
+    vlog(ctx, `catalog: direct nav exception: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
+/**
+ * Site search box'ını kullanarak ürün kodu ile arama yapar, ilk sonuç linkine
+ * tıklayıp ürün detay sayfasını açar. Başarılıysa final URL döner; aksi halde null.
+ *
+ * Enderyapı SPA — search box muhtemelen tüm sayfalarda var (`#inputsearchh-0`).
+ * Arama sonucu dropdown veya yeni sayfa olabilir; iki senaryoyu da deniyoruz.
+ */
+async function navigateBySearch(
+  ctx: ScrapeContext,
+  productCode: string,
+): Promise<string | null> {
+  // Ana sayfaya/login sonrasındaki sayfaya emin ol — search box her yerde olsa da
+  // navigation history temiz başlasın.
+  try {
+    const currentUrl = ctx.page.url();
+    if (!currentUrl.includes("enderyapi.com.tr")) {
+      await ctx.page.goto(`${SITE_BASE_URL}/tr`, {
+        waitUntil: "networkidle",
+        timeout: 15000,
+      });
+    }
+
+    const searchSelectors = [
+      "#inputsearchh-0",
+      `input[placeholder*="Arama" i]`,
+      `input[type="text"][placeholder*="arama" i]`,
+    ];
+    let searchInput = null;
+    for (const sel of searchSelectors) {
+      const loc = ctx.page.locator(sel).first();
+      if ((await loc.count()) > 0) {
+        searchInput = loc;
+        vlog(ctx, `catalog: search input found via ${sel}`);
+        break;
+      }
+    }
+    if (!searchInput) {
+      vlog(ctx, `catalog: search input bulunamadı`);
+      return null;
+    }
+
+    await searchInput.click();
+    await searchInput.fill("");
+    await searchInput.type(productCode, { delay: 40 });
+    vlog(ctx, `catalog: aranıyor → "${productCode}"`);
+
+    // İki senaryo: (1) dropdown'da ilk sonuç linkleniyor (2) Enter sonra arama sayfası
+    // Dropdown ilk: kısa bir bekleme + ilk link tıklama
+    await ctx.page.waitForTimeout(1200);
+
+    // Olasılık 1: dropdown linkleri — `a[href*="-p-"]` veya benzeri
+    const dropdownLinks = ctx.page.locator(`a[href*="-p-"]`);
+    const dropdownCount = await dropdownLinks.count();
+    if (dropdownCount > 0) {
+      vlog(ctx, `catalog: dropdown'da ${dropdownCount} link bulundu, ilki tıklanıyor`);
+      const href = await dropdownLinks.first().getAttribute("href");
+      if (href) {
+        const absoluteUrl = href.startsWith("http")
+          ? href
+          : `${SITE_BASE_URL}${href}`;
+        await Promise.all([
+          ctx.page.waitForURL(/-p-\d+/, { timeout: 15000 }).catch(() => null),
+          dropdownLinks.first().click(),
+        ]);
+        await ctx.page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => undefined);
+        const finalUrl = ctx.page.url();
+        if (finalUrl.match(/-p-\d+/)) {
+          vlog(ctx, `catalog: search nav → ${finalUrl}`);
+          return finalUrl;
+        }
+        // Doğrudan navigate dene
+        if (absoluteUrl.match(/-p-\d+/)) {
+          const ok = await navigateDirect(ctx, absoluteUrl);
+          if (ok) return absoluteUrl;
+        }
+      }
+    }
+
+    // Olasılık 2: Enter sonrası arama sonuç sayfası
+    vlog(ctx, `catalog: dropdown sonuç yok, Enter denenir`);
+    await searchInput.press("Enter");
+    await ctx.page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => undefined);
+    await ctx.page.waitForTimeout(800);
+
+    const resultLinks = ctx.page.locator(`a[href*="-p-"]`);
+    const resultCount = await resultLinks.count();
+    if (resultCount > 0) {
+      vlog(ctx, `catalog: sonuç sayfasında ${resultCount} link, ilki açılıyor`);
+      const href = await resultLinks.first().getAttribute("href");
+      if (href) {
+        const absoluteUrl = href.startsWith("http")
+          ? href
+          : `${SITE_BASE_URL}${href}`;
+        const ok = await navigateDirect(ctx, absoluteUrl);
+        if (ok) return absoluteUrl;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    vlog(ctx, `catalog: search nav exception: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+async function scrapeCatalog(
+  ctx: ScrapeContext,
+  targets: CatalogScrapeTarget[],
+): Promise<CatalogScrapeResult[]> {
+  const results: CatalogScrapeResult[] = [];
+
+  for (const target of targets) {
+    const code = target.productCode;
+    try {
+      let resolvedUrl: string | null = null;
+
+      // Önce cache'den dene
+      if (target.catalogUrl) {
+        const ok = await navigateDirect(ctx, target.catalogUrl);
+        if (ok) {
+          resolvedUrl = target.catalogUrl;
+          vlog(ctx, `catalog: cache hit ${code} → ${resolvedUrl}`);
+        } else {
+          vlog(ctx, `catalog: cache miss for ${code}, search'e düşülüyor`);
+        }
+      }
+
+      // Cache yoksa veya geçersizse search ile bul
+      if (!resolvedUrl) {
+        resolvedUrl = await navigateBySearch(ctx, code);
+      }
+
+      if (!resolvedUrl) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "product-not-found",
+          message: "Catalog detay sayfası açılamadı (direct + search ikisi de başarısız)",
+        });
+        continue;
+      }
+
+      const productNameRaw = await ctx.page
+        .locator("h1")
+        .first()
+        .textContent({ timeout: 2000 })
+        .catch(() => null);
+
+      // CSS class id'li hücrelerden değerleri çek
+      const readCell = async (sel: string): Promise<string | null> => {
+        try {
+          return (
+            await ctx.page
+              .locator(sel)
+              .first()
+              .textContent({ timeout: 3000 })
+          )?.trim() ?? null;
+        } catch {
+          return null;
+        }
+      };
+
+      const listPriceRaw = await readCell(FIELD_CSS.listPrice);
+      const netExclVatRaw = await readCell(FIELD_CSS.netExclVat);
+      const vatRaw = await readCell(FIELD_CSS.vat);
+      const discountRaw = await readCell(FIELD_CSS.discount);
+
+      // Marka — sayfada banner ya da link içinde olabilir; SEGNAN.jpg alt text dump'ta görünüyor
+      const brandRaw = await ctx.page
+        .locator(`[alt][title]`)
+        .filter({
+          hasNot: ctx.page.locator(`img[alt*="logo" i]`),
+        })
+        .first()
+        .getAttribute("title")
+        .catch(() => null);
+
+      vlog(
+        ctx,
+        `catalog: raw netExclVat=${netExclVatRaw ?? "null"}, vat=${vatRaw ?? "null"}, list=${listPriceRaw ?? "null"}, brand=${brandRaw ?? "null"}, discount=${discountRaw ?? "null"}`,
+      );
+
+      const unitPriceExclVat = parsePriceFromLabel(netExclVatRaw);
+      const vatRate = parseVatRate(vatRaw);
+      const listPrice = parsePriceFromLabel(listPriceRaw);
+
+      if (unitPriceExclVat === null) {
+        const dumped = await dumpPageHtml(ctx, code);
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "catalog-parse-failed",
+          message: `KDV'siz Net Fiyat parse edilemedi (raw: ${netExclVatRaw ?? "null"})${dumped ? `; HTML dump: ${dumped}` : ""}`,
+        });
+        continue;
+      }
+      if (vatRate === null) {
+        const dumped = await dumpPageHtml(ctx, code);
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "vat-rate-missing",
+          message: `KDV oranı parse edilemedi (raw: ${vatRaw ?? "null"})${dumped ? `; HTML dump: ${dumped}` : ""}`,
+        });
+        continue;
+      }
+
+      const unitPriceWithVat = Number(
+        (unitPriceExclVat * (1 + vatRate)).toFixed(2),
+      );
+
+      results.push({
+        ok: true,
+        productCode: code,
+        catalogUrl: resolvedUrl,
+        productName: productNameRaw?.trim(),
+        brand: brandRaw?.trim() || undefined,
+        listPrice,
+        discountText: discountRaw?.trim() || null,
+        unitPriceExclVat,
+        vatRate,
+        unitPriceWithVat,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      results.push({
+        ok: false,
+        productCode: code,
+        mode: "catalog-parse-failed",
+        message,
+      });
+    }
+  }
+
+  return results;
 }
 
 export const enderyapiAdapter: Adapter = {
@@ -535,6 +986,7 @@ export const enderyapiAdapter: Adapter = {
   listOrders,
   getOrderDetail,
   getProductPrice,
+  scrapeCatalog,
 };
 
 // Public export to silence unused warning + allow direct imports if needed

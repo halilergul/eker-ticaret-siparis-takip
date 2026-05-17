@@ -108,25 +108,41 @@ export type WriteItemsResult = {
 };
 
 /**
- * Sipariş satırlarını idempotent yazar. (order_id, product_code) unique constraint
- * üzerinden ON CONFLICT DO NOTHING.
+ * Sipariş satırlarını idempotent yazar. Her item için önce products tablosuna
+ * ensureProduct çağırır (kod + ad + catalogUrl ile upsert), dönen product_id
+ * order_items satırına yazılır. Böylece sipariş scrape sırasında catalog URL
+ * keşfi otomatik gerçekleşir; ileride catalog scrape direkt cache hit yapar.
  */
 export async function writeOrderItems(
+  supplierId: string,
   orderId: string,
   items: RawOrderItem[],
 ): Promise<WriteItemsResult> {
   if (items.length === 0) return { inserted: 0, skipped: 0 };
 
   const supabase = getServiceClient();
-  const rows = items.map((it) => ({
-    order_id: orderId,
-    product_code: it.productCode,
-    product_name: it.productName,
-    quantity: it.quantity,
-    unit_price_at_order: it.unitPriceAtOrder,
-  }));
 
-  // Önce mevcut satırların kodlarını al — skipped sayımı için
+  // 1) Her item için ensureProduct → productId al + catalog_url cache'le
+  const itemsWithProductId: Array<{
+    item: RawOrderItem;
+    productId: string;
+  }> = [];
+  for (const it of items) {
+    try {
+      const ensured = await ensureProduct({
+        supplierId,
+        code: it.productCode,
+        productName: it.productName,
+        catalogUrl: it.catalogUrl ?? undefined,
+      });
+      itemsWithProductId.push({ item: it, productId: ensured.productId });
+    } catch {
+      // ensureProduct fail → product_id NULL ile order_item yazılır (best effort)
+      itemsWithProductId.push({ item: it, productId: "" });
+    }
+  }
+
+  // 2) Mevcut satırların kodlarını al (idempotency)
   const existing = await supabase
     .from("order_items")
     .select("product_code")
@@ -141,10 +157,19 @@ export async function writeOrderItems(
   }
 
   const existingCodes = new Set(existing.data.map((r) => r.product_code));
-  const newRows = rows.filter((r) => !existingCodes.has(r.product_code));
+  const newRows = itemsWithProductId
+    .filter(({ item }) => !existingCodes.has(item.productCode))
+    .map(({ item, productId }) => ({
+      order_id: orderId,
+      product_id: productId || null,
+      product_code: item.productCode,
+      product_name: item.productName,
+      quantity: item.quantity,
+      unit_price_at_order: item.unitPriceAtOrder,
+    }));
 
   if (newRows.length === 0) {
-    return { inserted: 0, skipped: rows.length };
+    return { inserted: 0, skipped: items.length };
   }
 
   const insert = await supabase.from("order_items").insert(newRows);
@@ -157,7 +182,7 @@ export async function writeOrderItems(
     });
   }
 
-  return { inserted: newRows.length, skipped: rows.length - newRows.length };
+  return { inserted: newRows.length, skipped: items.length - newRows.length };
 }
 
 export type RecordPriceResult = {
@@ -218,3 +243,160 @@ export async function recordPriceObservation(
 
   return { productId: data as string, snapshotAdded };
 }
+
+export type EnsureProductParams = {
+  supplierId: string;
+  code: string;
+  productName?: string;
+  brand?: string;
+  vatRate?: number;
+  currentUnitPrice?: number;
+  catalogUrl?: string;
+};
+
+export type EnsureProductResult = {
+  productId: string;
+  created: boolean;
+  backfilledOrderItems: number;
+};
+
+/**
+ * Catalog scrape sırasında ürünü products tablosuna upsert eder.
+ * Mevcut order_items satırlarında product_id NULL olanları product_code üzerinden bağlar.
+ */
+export async function ensureProduct(
+  params: EnsureProductParams,
+): Promise<EnsureProductResult> {
+  const supabase = getServiceClient();
+
+  const existing = await supabase
+    .from("products")
+    .select("id")
+    .eq("supplier_id", params.supplierId)
+    .eq("code", params.code)
+    .maybeSingle();
+
+  if (existing.error) {
+    throw new ScrapeError({
+      mode: "db-write-failed",
+      step: "ensure-product",
+      details: existing.error.message,
+    });
+  }
+
+  let productId: string;
+  let created = false;
+
+  if (existing.data) {
+    productId = existing.data.id;
+    const updates: Database["public"]["Tables"]["products"]["Update"] = {};
+    if (params.productName) updates.name = params.productName;
+    if (params.brand !== undefined) updates.brand = params.brand;
+    if (params.vatRate !== undefined) updates.vat_rate = params.vatRate;
+    if (params.catalogUrl !== undefined) updates.catalog_url = params.catalogUrl;
+    if (params.currentUnitPrice !== undefined) {
+      updates.current_unit_price = params.currentUnitPrice;
+      updates.last_seen_at = new Date().toISOString();
+    }
+    if (Object.keys(updates).length > 0) {
+      const update = await supabase
+        .from("products")
+        .update(updates)
+        .eq("id", productId);
+      if (update.error) {
+        throw new ScrapeError({
+          mode: "db-write-failed",
+          step: "ensure-product",
+          details: update.error.message,
+        });
+      }
+    }
+  } else {
+    const insert = await supabase
+      .from("products")
+      .insert({
+        supplier_id: params.supplierId,
+        code: params.code,
+        name: params.productName ?? params.code,
+        brand: params.brand ?? null,
+        catalog_url: params.catalogUrl ?? null,
+        vat_rate: params.vatRate ?? 0.20,
+        current_unit_price: params.currentUnitPrice ?? null,
+        last_seen_at: params.currentUnitPrice !== undefined ? new Date().toISOString() : null,
+      })
+      .select("id")
+      .single();
+    if (insert.error || !insert.data) {
+      throw new ScrapeError({
+        mode: "db-write-failed",
+        step: "ensure-product",
+        details: insert.error?.message ?? "unknown",
+      });
+    }
+    productId = insert.data.id;
+    created = true;
+  }
+
+  // Back-fill: aynı tedarikçinin product_code'u eşleşen order_items.product_id NULL olanları doldur.
+  const backfill = await supabase
+    .from("order_items")
+    .update({ product_id: productId })
+    .eq("product_code", params.code)
+    .is("product_id", null)
+    .select("id");
+
+  let backfilledOrderItems = 0;
+  if (backfill.error) {
+    // Back-fill best-effort; ölümcül değil.
+    console.warn(
+      `[ensureProduct] back-fill warn for ${params.code}: ${backfill.error.message}`,
+    );
+  } else {
+    backfilledOrderItems = backfill.data?.length ?? 0;
+  }
+
+  return { productId, created, backfilledOrderItems };
+}
+
+export type WritePriceSnapshotParams = {
+  productId: string;
+  unitPriceWithVat: number;
+  unitPriceExclVat?: number;
+  listPrice?: number | null;
+  discountText?: string | null;
+  vatRate?: number;
+  source?: "catalog" | "order";
+  capturedAt?: string;
+};
+
+export async function writePriceSnapshot(
+  params: WritePriceSnapshotParams,
+): Promise<{ snapshotId: string }> {
+  const supabase = getServiceClient();
+
+  const insert = await supabase
+    .from("price_snapshots")
+    .insert({
+      product_id: params.productId,
+      captured_at: params.capturedAt ?? new Date().toISOString(),
+      unit_price: params.unitPriceExclVat ?? params.unitPriceWithVat,
+      unit_price_with_vat: params.unitPriceWithVat,
+      list_price: params.listPrice ?? null,
+      discount_text: params.discountText ?? null,
+      vat_rate: params.vatRate ?? null,
+      source: params.source ?? "catalog",
+    })
+    .select("id")
+    .single();
+
+  if (insert.error || !insert.data) {
+    throw new ScrapeError({
+      mode: "db-write-failed",
+      step: "write-price-snapshot",
+      details: insert.error?.message ?? "unknown",
+    });
+  }
+
+  return { snapshotId: insert.data.id };
+}
+

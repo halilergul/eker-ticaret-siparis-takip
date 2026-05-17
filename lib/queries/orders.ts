@@ -16,6 +16,7 @@ export type OrderTableRow = {
 
 export type OrderDetailItem = {
   id: string;
+  productId: string | null;
   productCode: string;
   productName: string;
   quantity: number;
@@ -56,6 +57,7 @@ type OrderListRow = {
 
 type OrderItemRow = {
   id: string;
+  product_id: string | null;
   product_code: string;
   product_name: string;
   quantity: number;
@@ -106,7 +108,7 @@ export async function getOrderDetail(id: string): Promise<OrderDetail | null> {
     .select(
       `id, order_no, status, ordered_at, total_amount, currency, notes,
        supplier:suppliers!inner ( slug, name ),
-       items:order_items ( id, product_code, product_name, quantity, unit_price_at_order )`,
+       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order )`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -156,6 +158,7 @@ function toOrderDetail(r: OrderDetailRow): OrderDetail {
     const unit = Number(it.unit_price_at_order);
     return {
       id: it.id,
+      productId: it.product_id,
       productCode: it.product_code,
       productName: it.product_name,
       quantity: qty,

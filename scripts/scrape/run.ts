@@ -190,7 +190,7 @@ async function runScrape(args: Args): Promise<void> {
         else summary.orders_skipped++;
 
         const detail = await adapter.getOrderDetail(ctx, order);
-        const itemsResult = await writeOrderItems(headerResult.orderId, detail.items);
+        const itemsResult = await writeOrderItems(supplierId, headerResult.orderId, detail.items);
         summary.items_inserted += itemsResult.inserted;
         summary.items_skipped += itemsResult.skipped;
 

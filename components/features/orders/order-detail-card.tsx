@@ -79,7 +79,16 @@ export function OrderDetailCard({ detail }: Props) {
                     {item.productCode}
                   </td>
                   <td className="px-4 py-3 text-slate-900">
-                    {item.productName}
+                    {item.productId ? (
+                      <Link
+                        href={ROUTES.PRODUCT_DETAIL(item.productId)}
+                        className="hover:underline"
+                      >
+                        {item.productName}
+                      </Link>
+                    ) : (
+                      item.productName
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                     {item.quantity}

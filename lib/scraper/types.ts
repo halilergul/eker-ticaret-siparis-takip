@@ -25,12 +25,41 @@ export type RawOrderItem = {
   productName: string;
   quantity: number;
   unitPriceAtOrder: number;
+  /** Sipariş detay sayfasında ürün adı/görseli linkliyse buradan yakalanır.
+   *  Sonraki catalog scrape direkt navigate eder, search'e gerek kalmaz. */
+  catalogUrl?: string | null;
 };
 
 export type RawOrderDetail = {
   summary: RawOrderSummary;
   items: RawOrderItem[];
 };
+
+export type CatalogScrapeTarget = {
+  productCode: string;
+  /** Eğer DB'de cache'lenmiş URL varsa direkt navigate edilir; yoksa search kullanılır. */
+  catalogUrl?: string | null;
+};
+
+export type CatalogScrapeResult =
+  | {
+      ok: true;
+      productCode: string;
+      catalogUrl: string;
+      productName?: string;
+      brand?: string;
+      listPrice: number | null;
+      discountText: string | null;
+      unitPriceExclVat: number;
+      vatRate: number;
+      unitPriceWithVat: number;
+    }
+  | {
+      ok: false;
+      productCode: string;
+      mode: FailureMode;
+      message: string;
+    };
 
 export interface Adapter {
   readonly slug: string;
@@ -45,6 +74,10 @@ export interface Adapter {
     ctx: ScrapeContext,
     productCode: string,
   ): Promise<number | null>;
+  scrapeCatalog?(
+    ctx: ScrapeContext,
+    targets: CatalogScrapeTarget[],
+  ): Promise<CatalogScrapeResult[]>;
 }
 
 export const scrapeSummarySchema = z.object({

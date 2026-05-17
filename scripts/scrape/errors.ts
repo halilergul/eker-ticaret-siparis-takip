@@ -12,6 +12,9 @@ export type FailureMode =
   | "cookie-banner-block"
   | "db-write-failed"
   | "supplier-not-found"
+  | "catalog-parse-failed"
+  | "product-not-found"
+  | "vat-rate-missing"
   | "unknown";
 
 export type ScrapeErrorOptions = {
@@ -62,6 +65,12 @@ function messageForMode(mode: FailureMode): string {
       return "Veritabanına yazma başarısız.";
     case "supplier-not-found":
       return "Bilinmeyen tedarikçi (--supplier).";
+    case "catalog-parse-failed":
+      return "Catalog detay sayfası parse edilemedi.";
+    case "product-not-found":
+      return "Ürün tedarikçi katalogunda bulunamadı.";
+    case "vat-rate-missing":
+      return "Ürünün KDV oranı catalog sayfasından okunamadı.";
     case "unknown":
     default:
       return ERROR_MESSAGES.UNKNOWN;
