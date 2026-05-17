@@ -3,9 +3,16 @@ _Oluşturulma: 2026-05-15 | Son güncelleme: 2026-05-15_
 _Profil: web-fullstack_
 
 ## Proje özeti
-- **Proje:** Eker-Ticaret
-- **Amaç:** _Bu projenin neyi çözdüğünü tek paragrafta yaz_
-- **Hedef kullanıcı:** _Kim kullanacak?_
+- **Proje:** Eker-Ticaret Takip Dashboard
+- **Amaç:** Nalbur işletmesi Eker Ticaret'in tedarikçi B2B sitelerinden toptan satın aldığı ürünlerin, satın alma sonrası fiyat değişimini (özellikle zamları) takip eden bir dashboard. Tedarikçi sipariş geçmişindeki alış fiyatı ile B2B sitedeki güncel fiyat karşılaştırılır; zamlı ürünler öne çıkarılır.
+- **Hedef kullanıcı:** Eker Ticaret'in tek bir çalışanı/sahibi (kişisel kullanım, paylaşım yok).
+- **V1 kapsam:**
+  - Birden fazla B2B tedarikçi sitesine login + scrape (ilk hedef: `b2b.enderyapi.com.tr`)
+  - Sipariş geçmişi / faturalardan ürün + alış fiyatı + tarih çekme (manuel giriş yok)
+  - Güncel B2B fiyatları periyodik (günde 1) çekme + manuel "şimdi güncelle" tetiği
+  - Zamlı ürünleri öne çıkaran liste; ürün bazlı fiyat değişim geçmişi
+  - Otomatik scrape ayarı: kullanıcı saatini seçer, açıp kapatabilir
+- **V1 anti-goal'ler:** Stok takibi, satış/POS, müşteri yönetimi, çoklu kullanıcı/rol, mobil native — **YOK**.
 
 ## Teknik stack
 _Profil overlay'i bu bölümün altına ek yapar. Manuel düzenleme yapmadan önce alttaki Stack Detayları bölümünü oku._
@@ -44,8 +51,8 @@ _Profil overlay'inden gelir_
 - Kullanıcıya teknik detay gösterilmez
 
 ## i18n / Dil
-- **Birincil dil:** Türkçe / İngilizce (proje açılışında seç)
-- **Türkçe karakter desteği:** _Etkin / Pasif_ — etkinse `ı, İ, ş, Ş, ç, Ç, ğ, Ğ, ö, Ö, ü, Ü, â, î, û` her yerde test edilmeli (collation, encoding, sort)
+- **Birincil dil:** Türkçe (tek kullanıcı, TR pazar, TR tedarikçiler)
+- **Türkçe karakter desteği:** **Etkin** — `ı, İ, ş, Ş, ç, Ç, ğ, Ğ, ö, Ö, ü, Ü, â, î, û` her yerde test edilmeli (collation, encoding, sort, ürün adı arama)
 
 ## Mimari kararlar
 _Her kararın tarihi ve gerekçesi tutulur_
@@ -53,29 +60,39 @@ _Her kararın tarihi ve gerekçesi tutulur_
 | Tarih | Karar | Gerekçe |
 |-------|-------|---------|
 | 2026-05-15 | Proje başlatıldı | — |
+| 2026-05-15 | Stack: Next.js 14 (App Router) + Supabase + Vercel + GitHub Actions | `web-fullstack` profil default'u; hepsi free tier'da kalıyor, sıfır maliyet hedefi tutuyor |
+| 2026-05-15 | Scheduled scrape job **GitHub Actions** üzerinde, Vercel Cron değil | Playwright binary boyutu/timeout Vercel Functions sınırlarını aşar; GitHub Actions free tier (2.000 dk/ay) tek kullanıcı/günlük scrape için bol bol yeter |
+| 2026-05-15 | Çoklu B2B site için **adapter mimarisi** | Her tedarikçi site (login akışı, sipariş geçmişi sayfası, ürün sayfası selector'ları) ayrı modül; yeni site eklemek = yeni adapter; UI değişmez |
+| 2026-05-15 | İlk hedef site: `b2b.enderyapi.com.tr` | Kullanıcının kullandığı ilk tedarikçi; diğer siteler sırayla adapter olarak eklenecek |
+| 2026-05-15 | Sipariş verisi B2B sitenin sipariş geçmişi/faturalarından scrape edilir | Manuel veri girişi V1'de yok; tek hakikat kaynağı tedarikçi sisteminin kendisi |
+| 2026-05-15 | B2B kimlik bilgileri **GitHub Secrets**'ta encrypted saklanır | Server-side scrape için gerekli; Supabase Vault da seçenek ama Actions ortamı için Secrets daha doğal |
+| 2026-05-15 | Auth: Supabase Auth, tek kullanıcı, magic link veya email/password | Public web'de dashboard'un açık durmaması için basit koruma |
+| 2026-05-15 | Otomatik scrape ayarı (saat + on/off) DB'de tutulur, GitHub Action saatlik tetiklenip kontrol eder | Cron schedule'ı koddan değiştirmek yerine UI'dan ayarlanabilirlik için |
 
 ## Kısıtlar ve özel durumlar
 _Geliştirme sırasında ortaya çıkan kısıtlar buraya eklenir_
 
-- [ ] Henüz tanımlanmadı
+- **Sıfır maliyet:** Tüm bileşenler free tier'da kalmalı. Free tier'ı aşma riski olan kararlar için kullanıcıya alternatif sunulur (örn. GitHub Actions dk kotası dolma riski → scrape sıklığı düşürme).
+- **Tek kullanıcı:** Çoklu kullanıcı/rol/permission mimarisi V1'de yok; ileride eklenirse RLS politikaları buna göre genişletilecek.
+- **B2B siteler login arkasında:** Tüm scraping authenticated session ile yapılır; anonim ürün sayfaları kullanılmaz (liste fiyat ≠ kullanıcıya özel iskonto sonrası fiyat).
+- **Site DOM değişimi kırılma noktası:** Her adapter için sağlam selector'lar + parse hatalarını yakalama + son başarılı çekim zamanı + son hata mesajı kayıt altında.
+- **CORS gerçeği:** B2B siteye doğrudan tarayıcıdan istek atılamaz; tüm fetch'ler GitHub Actions runner'ı (Playwright) üzerinden server-side yapılır.
+- **Şifre güvenliği:** B2B kullanıcı/şifresi sadece encrypted secret olarak GitHub'da; commit log'una/repo'ya/issue'ya asla yazılmaz.
 
 ## Açık sorular
 _Cevabı henüz netleşmemiş kararlar_
 
-- [ ] Deployment hedefi (Vercel / self-hosted / mobile store)
-- [ ] Analytics / izleme tercihleri
+- [x] ~~Deployment hedefi~~ → Frontend: **Vercel**; Scrape job: **GitHub Actions**
+- [ ] Analytics / izleme tercihleri (V1'de muhtemelen gerekmiyor; tek kullanıcı)
+- [ ] Auth yöntemi: magic link mi email/password mi? (`/speckit-specify` aşamasında netleşir)
+- [ ] Eklenecek diğer B2B siteleri listesi (kullanıcı zamanı geldikçe ekleyecek)
+- [ ] Fiyat değişim eşiği (örn. %1'den küçük dalgalanmaları "zam" sayma) — UI'da ayarlanabilir mi?
+- [ ] Bildirim: zamlı ürün tespit edilince e-posta/push mı, sadece dashboard üzerinde mi? (V1 muhtemelen sadece dashboard)
 
-## Figma Tasarım Referansı
-_Proje tasarımı varsa bu bölüm doldurulur, yoksa silinir_
-
-- **Figma File URL:** —
-- **Figma API Key:** `.mcp.json` dosyasında tanımlı (repo'ya girmez)
-
-### Tasarım kullanım kuralları
-- Geliştirme sırasında Figma tasarımından sapılmaz
-- Renk, spacing ve tipografi değerleri Figma'dan alınır
-- Tasarımda tanımlı olmayan bir UI kararı için varsayım yapılmaz, kullanıcıya sorulur
-- Figma tasarımı olan feature'larda frontend implementasyonu sonrası ui-ux-agent ile uyum kontrolü yapılır (maks. 3 iterasyon)
+## Tasarım Yaklaşımı
+- **Figma yok.** UI/UX kararları her feature öncesi `ui-ux-agent` tarafından `.docs/UIUX-NNN.md` olarak yazılacak (renk, tipografi, spacing, component pattern'ları).
+- frontend-agent UIUX dokümanını referans alır; sapma olmaz.
+- Implementasyon sonrası ui-ux-agent uyum kontrolü yapar (maks. 3 iterasyon).
 
 ## Toplantı/iletişim geçmişi
 _Müşteri/paydaş görüşmesi varsa buraya not düşülür_
@@ -109,9 +126,9 @@ _Müşteri/paydaş görüşmesi varsa buraya not düşülür_
 ### Klasör yapısı
 ```
 app/                        # Next.js App Router
-  (marketing)/              # Public route group
-  (app)/                    # Authenticated route group
-  api/                      # Route handlers
+  (auth)/                   # Login route group
+  (app)/                    # Authenticated dashboard route group
+  api/                      # Route handlers (manuel scrape tetiği, vb.)
   layout.tsx
   page.tsx
 components/
@@ -124,14 +141,33 @@ lib/
     middleware.ts           # Auth middleware
   validations/              # zod schemas
   utils.ts
+src/
+  scraper/
+    adapters/               # Her B2B site için ayrı adapter modülü
+      enderyapi.ts          # b2b.enderyapi.com.tr
+      <site>.ts             # ileride eklenecek diğer siteler
+    common/                 # Ortak Playwright helpers, login flow
+    index.ts                # CLI entry: tüm aktif site'leri scrape eder
 supabase/
   migrations/               # SQL migration'lar
   seed.sql
+.github/
+  workflows/
+    scrape.yml              # Saatlik tetik + manuel dispatch
 public/
 ```
 
+### Scheduled Scrape Job (proje-spesifik ek)
+- **Çalışma yeri:** GitHub Actions (Vercel Cron değil — Playwright sığmaz)
+- **Sıklık:** Saatte 1 tetiklenir; her tetikte DB'deki kullanıcı ayarına (saat + on/off) bakar, uyuyorsa kendi kendini durdurur
+- **Browser:** Playwright (Chromium, headless), `npx playwright install --with-deps chromium`
+- **Çıktı:** Sonuçlar Supabase'e yazılır (`price_snapshots` veya benzeri tablo)
+- **Manuel tetik:** GitHub Actions `workflow_dispatch` veya frontend'den repository_dispatch ile başlatılır
+- **Secrets:** `SUPABASE_SERVICE_ROLE_KEY` + her B2B site için `EKER_<SITE>_USERNAME`, `EKER_<SITE>_PASSWORD` (GitHub Repo Secrets)
+- **Mimari:** `src/scraper/adapters/<site>.ts` — her tedarikçi site için ayrı adapter modülü (login, listOrders, getCurrentPrice fonksiyonları)
+
 ### Deployment
-- **Platform:** Vercel
+- **Platform:** Vercel (frontend)
 - **Environment variables:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (sadece server tarafında)
 - **CI:** Vercel preview deployments (PR başına otomatik)
 
@@ -168,4 +204,7 @@ tailwindcss, postcss, autoprefixer
 zod, react-hook-form, @hookform/resolvers
 lucide-react
 vitest, @testing-library/react, @testing-library/jest-dom
+
+# Scrape job (sadece GitHub Actions runner'ında kurulur, Vercel'e gitmez)
+playwright
 ```

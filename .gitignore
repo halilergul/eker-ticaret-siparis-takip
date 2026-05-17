@@ -16,6 +16,9 @@ out/
 .expo/
 .expo-shared/
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Bağımlılıklar
 node_modules/
 .pnp.*
@@ -38,6 +41,9 @@ venv/
 # Agent local memory (kişisel, repo'ya girmez)
 .claude/agent-memory-local/
 
+# Claude Code lokal ayarlar (kişisel permission listesi)
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
@@ -47,6 +53,9 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+
+# Scraper debug artifacts (screenshot'lar, gitignored)
+scrape-debug/
 
 # Logs
 *.log

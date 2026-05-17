@@ -18,4 +18,129 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 
 ## Kayıtlar
 
-_Henüz change request yok._
+### CR-001 — Feature 001-auth-dashboard tamamlandı
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Auth + boş dashboard iskeleti. Tek kullanıcı email+şifre ile giriş, `/dashboard` korumalı route, üst barda karşılama + çıkış butonu. Spec: [specs/001-auth-dashboard/spec.md](../specs/001-auth-dashboard/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni:** `lib/routes.ts`, `lib/validations/auth.ts`, `app/(auth)/login/page.tsx`, `app/(auth)/login/actions.ts`, `app/(app)/layout.tsx`, `app/(app)/dashboard/page.tsx`, `components/features/auth/login-form.tsx`, `components/features/auth/logout-button.tsx`, `components/ui/top-bar.tsx`
+  - **Değiştirilen:** `lib/supabase/middleware.ts` (route guard + Cache-Control no-store eklendi), `app/page.tsx` (sağlık kontrolünden koşullu redirect'e dönüştürüldü)
+- **Etki analizi:** ~3 saat (spec + plan + research + tasks dahil), tek branch `001-auth-dashboard`, geri dönüş riski düşük. RLS politikası gerekmedi (yeni tablo yok).
+- **Durum:** Tamamlandı. Manuel regression (QS-01 → QS-09) 2026-05-16'da kullanıcı tarafından geçirildi — tüm ✅.
+
+### CR-002 — Feature 002-enderyapi-scraper-poc tamamlandı (kod)
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** b2b.enderyapi.com.tr için Playwright tabanlı CLI scraper PoC. Spec: [specs/002-enderyapi-scraper-poc/spec.md](../specs/002-enderyapi-scraper-poc/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni klasör/dosyalar:** `scripts/scrape/{constants,credentials,price-parse,output,errors,detection,enderyapi,README}.ts/md`
+  - **Değiştirilen:** `package.json` (devDeps: playwright + tsx + dotenv; script: `scrape:enderyapi`), `.env.example` (ENDERYAPI_USERNAME, ENDERYAPI_PASSWORD), `.gitignore` (`scrape-debug/`)
+- **Etki analizi:** ~4 saat (spec + plan + research + tasks + code). Next.js runtime'ına etkisi yok (scraper standalone). 3 bilinçli Constitution sapması (G2, G13, G14) plan.md → Complexity Tracking'te belgelendi; 004-005'te düzeltilecek.
+- **Durum:** Tamamlandı (2026-05-16). **Senaryo A — feasibility kanıtlandı.** Login + navigation + parsing tüm üç adım çalışıyor; 20 sipariş başarıyla okundu. Site yapısı keşfedildi: SPA, iki-seviyeli (sipariş listesi → siparis-detay → ürün satırı), katalog 3. seviye. Implementation sırasında 4 küçük iterasyon yapıldı: (1) submit selector array genişletildi + Enter fallback, (2) 2FA detection sıkılaştırıldı (false positive fix), (3) SPA login için URL change wait, (4) detay sayfası için networkidle wait + verbose log. Site bulguları `dev-gotchas.md`'ye işlendi; 003'te Supabase schema'sı bu yapıya uygun (orders + order_items + products) tasarlanacak, 004'te tam scraper yazılacak.
+
+### CR-003 — Feature 003-supabase-schema tamamlandı (kod)
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Tedarikçi sipariş ve fiyat takibi için Supabase Postgres schema'sı. 5 tablo (`suppliers`, `supplier_orders`, `order_items`, `products`, `price_snapshots`) + RLS + RPC fonksiyon (`record_price_observation`) + TypeScript type üretimi. Spec: [specs/003-supabase-schema/spec.md](../specs/003-supabase-schema/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni migration'lar** (`supabase/migrations/`):
+    - `20260516153627_core_tables.sql` — 5 tablo + index'ler + CHECK + FK + UNIQUE
+    - `20260516153940_updated_at_trigger.sql` — `set_updated_at()` + 4 tabloya trigger
+    - `20260516154009_rls_policies.sql` — RLS enable + 20 policy (4×5)
+    - `20260516154039_seed_enderyapi.sql` — supplier seed
+    - `20260516154251_record_price_observation.sql` — idempotent fiyat snapshot RPC
+    - `20260516154431_fix_set_updated_at_search_path.sql` — advisor düzeltme
+    - `20260516154507_rls_policies_optimize_auth_calls.sql` — `(select auth.uid())` ile sarma
+    - `20260516154905_grant_table_privileges_to_authenticated.sql` — authenticated role'a CRUD GRANT
+  - **Yeni:** `lib/supabase/database.types.ts` (Supabase MCP generate_typescript_types çıktısı)
+  - **Değiştirilen:** `lib/supabase/client.ts`, `lib/supabase/server.ts` (`<Database>` generic eklendi)
+- **Etki analizi:** ~3 saat (spec + plan + research + tasks + code + 8 manuel QS doğrulama + 3 advisor düzeltmesi). Constitution 14/14 ✅ — bilinçli sapma yok. 002'deki G14 (migration file-versioning) düzeltildi. Authenticated role privilege eksikliği implementation sırasında yakalandı, GRANT migration ile düzeltildi (dev-gotchas'a kaydedildi).
+- **Durum:** Tamamlandı. Quickstart QS-00 → QS-08 tamamı ✅. Advisor: schema-related 0 critical (1 ek WARN `auth_leaked_password_protection` Auth Dashboard'da manuel açılır). 004 scraper artık bu schema'ya yazabilir.
+
+### CR-004 — Feature 004-enderyapi-scraper-prod tamamlandı (kısmi)
+- **Tarih:** 2026-05-16
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Multi-supplier adapter mimarisi + Enderyapi adapter + DB yazma + scrape_runs audit. Spec: [specs/004-enderyapi-scraper-prod/spec.md](../specs/004-enderyapi-scraper-prod/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni klasör/dosyalar:**
+    - `lib/scraper/{types,errors,adapter-registry,supabase-writer,run-logger}.ts`
+    - `lib/scraper/adapters/enderyapi.ts` (PoC'tan adapter pattern'a port)
+    - `scripts/scrape/run.ts` (CLI orchestrator)
+  - **Yeni migration'lar:**
+    - `20260516161959_scrape_runs.sql` (audit table)
+    - `20260516202902_grant_table_privileges_to_service_role.sql` (003 sonrası eksik GRANT — service_role'e CRUD + RPC)
+  - **Değiştirilen:**
+    - `scripts/scrape/credentials.ts` — `loadCredentials(slug)` generic
+    - `scripts/scrape/errors.ts` — yeni FailureMode değerleri (`db-write-failed`, `supplier-not-found`)
+    - `scripts/scrape/enderyapi.ts` — deprecation banner
+    - `scripts/scrape/README.md` — yeni mimari + adapter ekleme rehberi
+    - `package.json` — `"scrape": "tsx scripts/scrape/run.ts"` script
+    - `lib/supabase/database.types.ts` — `scrape_runs` ile regen
+- **Etki analizi:** ~5 saat (spec + plan + research + tasks + code + manuel QS doğrulama). Constitution 14/15 ✅, 1 ⚠ G15 (credentials lokalde, 005'te GitHub Secrets'a taşınacak). Implementation sırasında 1 sürpriz: service_role'e GRANT eksikti (001'deki revoke migration'ından miras), düzeltme migration ile çözüldü ve dev-gotchas'a kaydedildi.
+- **Kısmi tamamlandı**: P1 ✅ (sipariş geçmişi DB'de, idempotent), P3 ✅ (scrape_runs audit). **P2 ertelenmiş**: katalog DOM keşfi (T022-T025) → 005 feature'a taşındı. Sebep: ürün katalog sayfası URL pattern'ı + fiyat selector'ları henüz keşfedilmedi; GitHub Actions ortamında gerçek workflow ile birlikte yapılır. T021 (login-fail test) de ertelendi (gerçek hesap kilitleme riski).
+- **Bilinen sınırlama**: `getOrderDetail` her sipariş için yalnızca 1 ürün satırı parse ediyor; muhtemelen tablo başlığı/summary satırı sayılıyor. T022 sırasında --headed mode'da düzeltilir (item parser refine).
+- **Manuel doğrulama**: QS-03 ✅ (5 sipariş 13sn'de DB'ye yazıldı), QS-04 ✅ (idempotent: 2. koşumda 0 yeni), QS-06 ✅ (scrape_runs zengin), QS-08 ✅ (zero secret leak).
+- **Durum**: Kısmi tamamlandı (US1 + US3 ✅, US2 → 005). MVP açısından çalışır: sipariş geçmişi DB'de, 006 dashboard feature artık başlayabilir.
+
+### CR-005 — Feature 005-orders-dashboard tamamlandı (kod)
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Authenticated `/dashboard` sipariş listesi + tedarikçi/durum filtre'leri (URL search params) + sipariş detayı (`/dashboard/orders/[id]`) + data-quality flag. Spec: [specs/005-orders-dashboard/spec.md](../specs/005-orders-dashboard/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni:**
+    - `lib/format/{date,currency}.ts` — `Intl.DateTimeFormat('tr-TR')` + `Intl.NumberFormat('tr-TR', { currency: 'TRY' })`
+    - `lib/validations/order-filter.ts` — zod schema + `parseFilter`
+    - `lib/queries/orders.ts` — data layer (4 fonksiyon: `listOrders`, `getOrderDetail`, `listSuppliers`, `listDistinctStatuses`) + tip dönüşüm helper'ları
+    - `components/features/orders/{empty-state,copy-command-button,order-row,order-table,filter-bar,order-detail-card}.tsx`
+    - `app/(app)/dashboard/orders/[id]/page.tsx`
+  - **Değiştirilen:**
+    - `lib/routes.ts` — `ORDER_DETAIL(id)` eklendi
+    - `app/(app)/dashboard/page.tsx` — Server Component rewrite (placeholder → tablo + filter bar)
+- **Mimari kararlar:** Server Component default; sadece `OrderRow`, `FilterBar`, `CopyCommandButton` Client. Filter state URL search params'ta (zod ile validate), `useTransition` UX için. Sipariş detayı modal değil ayrı route (Server Component friendly, bookmark-able). Distinct status'lar için Supabase REST native DISTINCT yok → fetch + `Set` tekleştirme (V2: RPC).
+- **Etki analizi:** ~4 saat (spec + plan + research + tasks + code). DB schema'ya dokunulmadı (003/004 schema yeterli). 32 task'tan 22 kod task'ı tamam; T012/T013/T017-T019/T022-T026/T029/T032 manuel browser QS testleri (kullanıcı doğrulayacak).
+- **Constitution gates**: 15/15 ✅, G15 hâlâ ⚠ (credentials lokal — 008 GitHub Actions migrasyonunda kapanır; bu feature secret'lara dokunmuyor).
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard` 107 kB, `/dashboard/orders/[id]` 106 kB First Load JS); advisor'larda 005 kaynaklı yeni bulgu yok (önceki state korunuyor).
+- **Durum**: Kod tamam, manuel QS-01 → QS-10 (browser) kullanıcı doğrulamasına hazır.
+
+### CR-006 — Feature 006-price-changes-dashboard tamamlandı (kod scaffolding)
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Catalog scrape + KDV-aware price tracking + zamlanan ürünler dashboard'u. Spec: [specs/006-price-changes-dashboard/spec.md](../specs/006-price-changes-dashboard/spec.md). 005'in temelinden besleniyor; takip değişkeni **KDV dahil özel birim fiyat** olarak netleşti.
+- **Etkilenen dosyalar:**
+  - **Yeni migration'lar:**
+    - `add_vat_rate_to_products` — products.vat_rate NUMERIC(5,4) NOT NULL DEFAULT 0.20
+    - `extend_price_snapshots_with_components` — price_snapshots'a 5 yeni kolon (unit_price_with_vat, list_price, discount_text, vat_rate, source)
+    - `add_product_id_to_order_items` — order_items.product_id FK products(id); ürün-sipariş cross-link için
+    - `add_brand_to_products` — products.brand TEXT (ek bulgu: 003'te yoktu)
+    - `create_get_price_changes_rpc` — PL/SQL window function ürün başına eski/yeni karşılaştırma
+  - **Yeni:**
+    - `lib/format/percent.ts` — formatTrPercent (signed +%X,Y)
+    - `lib/constants/price-changes.ts` — DEFAULT_DAYS_WINDOW, MAX_DAYS_WINDOW, DAYS_PRESETS
+    - `lib/validations/price-changes-filter.ts` — zod + parsePriceChangesFilter
+    - `lib/queries/{price-changes,products}.ts` — listPriceChanges (RPC), getProductById, listProductSnapshots (JS pencere hesabı), listProductOrders
+    - `components/features/price-changes/{window-filter,price-change-row,price-change-table,price-changes-empty-state,sparkline,product-header-card,product-history-table,product-orders-list}.tsx`
+    - `components/ui/top-bar-nav.tsx` — Siparişler / Zamlananlar nav
+    - `app/(app)/dashboard/price-changes/page.tsx`
+    - `app/(app)/dashboard/products/[id]/page.tsx`
+    - `scripts/scrape/catalog.ts` — CLI orchestrator (--supplier, --product-code, --limit, --only-stale, --headed)
+  - **Değiştirilen:**
+    - `lib/routes.ts` — PRICE_CHANGES + PRODUCT_DETAIL
+    - `lib/queries/orders.ts` — `OrderDetailItem.productId` eklendi (cross-link için)
+    - `components/features/orders/order-detail-card.tsx` — item satırlarında productId varsa ürün detayına link
+    - `components/ui/top-bar.tsx` — TopBarNav entegrasyonu + logo link
+    - `lib/scraper/types.ts` — Adapter.scrapeCatalog method + CatalogScrapeResult tipi
+    - `lib/scraper/adapters/enderyapi.ts` — scrapeCatalog impl (URL pattern candidate'ları + label-based field extraction)
+    - `lib/scraper/supabase-writer.ts` — ensureProduct (UPSERT + order_items.product_id back-fill) + writePriceSnapshot
+    - `scripts/scrape/errors.ts` — yeni FailureMode değerleri (catalog-parse-failed, product-not-found, vat-rate-missing)
+    - `lib/supabase/database.types.ts` — regen (yeni kolonlar + RPC)
+    - `package.json` — `scrape:catalog` script
+- **Mimari kararlar:**
+  - **KDV dahil özel birim fiyat = canonical tracking variable** (memory'de project-eker-vat-pricing-model).
+  - 005'in Server Component default deseni; sadece WindowFilter Client (URL search params + useTransition).
+  - Sparkline native SVG (50 satırlık component) — 3rd-party chart lib yok.
+  - RPC `get_price_changes(window_days, include_drops)` SQL pencere fonksiyonu — UI tek çağrı.
+  - Snapshot history (ürün detay) JS pencere hesabı (R-008) — ürün başına az veri için RPC overkill.
+- **Etki analizi:** ~7 saat (spec + plan + research + tasks + code). Constitution gates 13/15 ✅, 2 ⚠ (G13 bilinçli RPC kullanımı, G15 hâlâ açık → 008). Implementation sırasında 2 sürpriz: (1) 003 schema'da `price_snapshots.captured_at` (data-model'da `observed_at` yazılmıştı) — RPC SQL'de düzeltildi; (2) `products.brand` kolonu hiç yoktu — ek migration eklendi. 45 task'tan 30+ kod task'ı tamam; manuel browser/CLI QS (T020, T028, T035-T037, T038-T039) kullanıcı testine bırakıldı.
+- **Bilinen kısıtlama**: Enderyapı catalog URL pattern'ı + DOM selector'ları **henüz keşfedilmedi** — adapter'da 4 candidate URL ve label-based xpath extraction var. Kullanıcı `npm run scrape:catalog -- --supplier enderyapi --product-code "118 049" --headed --verbose` ile iteratif test ederek selector'ları doğrulayacak.
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard/price-changes` 107 kB, `/dashboard/products/[id]` 106 kB First Load JS); advisor'larda yeni SECURITY uyarısı yok (sadece INFO `order_items_product_id_idx unused`, catalog scrape backfill sonrası dolacak).
+- **Durum**: Kod scaffolding tamam, **catalog DOM keşfi + manuel QS** kullanıcı eylemine bağlı.

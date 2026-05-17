@@ -160,3 +160,23 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - API key'ler asla kaynak koda girmez — `.env` veya gizli config kullan
 - `.docs/project-init/` salt okunur referans — agent değiştiremez
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
+
+<!-- SPECKIT START -->
+**Aktif feature**: `006-price-changes-dashboard`
+- Spec: [specs/006-price-changes-dashboard/spec.md](specs/006-price-changes-dashboard/spec.md)
+- Plan: [specs/006-price-changes-dashboard/plan.md](specs/006-price-changes-dashboard/plan.md)
+- Research: [specs/006-price-changes-dashboard/research.md](specs/006-price-changes-dashboard/research.md)
+- Data model: [specs/006-price-changes-dashboard/data-model.md](specs/006-price-changes-dashboard/data-model.md)
+- Contracts: [specs/006-price-changes-dashboard/contracts/](specs/006-price-changes-dashboard/contracts/) (routes, data-queries, catalog-scraper)
+- Quickstart (manuel test): [specs/006-price-changes-dashboard/quickstart.md](specs/006-price-changes-dashboard/quickstart.md)
+
+**Önceki feature'lar** (tamamlandı, push edildi):
+- `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
+- `002-enderyapi-scraper-poc` — [spec](specs/002-enderyapi-scraper-poc/spec.md) (PoC Senaryo A)
+- `003-supabase-schema` — [spec](specs/003-supabase-schema/spec.md) (5 tablo + RLS + RPC + types)
+- `004-enderyapi-scraper-prod` — [spec](specs/004-enderyapi-scraper-prod/spec.md) (US1+US3; US2 006'ya ertelendi)
+- `005-orders-dashboard` — [spec](specs/005-orders-dashboard/spec.md) (sipariş listesi + filter + detay; KDV-aware UI)
+
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan.
+<!-- SPECKIT END -->
