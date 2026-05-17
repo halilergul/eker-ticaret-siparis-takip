@@ -2,13 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 
 import { saveSchedule } from "@/app/actions/save-schedule";
-import {
-  saveScheduleSchema,
-  type SaveScheduleInput,
-} from "@/lib/validations/schedule-form";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 const ISTANBUL_OFFSET_HOURS = 3;
@@ -19,9 +14,26 @@ type Props = {
   initialDailyHourUtc: number;
 };
 
+type FormValues = {
+  enabled: boolean;
+  dailyHourIst: number;
+};
+
 type Message =
   | { kind: "success"; text: string }
   | { kind: "error"; text: string };
+
+function istToUtc(istHour: number): number {
+  return (istHour - ISTANBUL_OFFSET_HOURS + 24) % 24;
+}
+
+function utcToIst(utcHour: number): number {
+  return (utcHour + ISTANBUL_OFFSET_HOURS) % 24;
+}
+
+function pad(n: number): string {
+  return n.toString().padStart(2, "0");
+}
 
 function formatNextRun(iso: string | null): string {
   if (!iso) return "Otomatik scrape kapalı.";
@@ -31,17 +43,9 @@ function formatNextRun(iso: string | null): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "Europe/Istanbul",
   });
-  return `Sonraki otomatik scrape: ${formatter.format(new Date(iso))} UTC`;
-}
-
-function istanbulHour(hourUtc: number): number {
-  return (hourUtc + ISTANBUL_OFFSET_HOURS) % 24;
-}
-
-function pad(n: number): string {
-  return n.toString().padStart(2, "0");
+  return `Sonraki otomatik scrape: ${formatter.format(new Date(iso))} (Türkiye saati)`;
 }
 
 export function ScheduleForm({
@@ -58,33 +62,32 @@ export function ScheduleForm({
     watch,
     formState: { isDirty },
     reset,
-  } = useForm<SaveScheduleInput>({
-    resolver: zodResolver(saveScheduleSchema),
+  } = useForm<FormValues>({
     defaultValues: {
-      supplierSlug,
       enabled: initialEnabled,
-      dailyHourUtc: initialDailyHourUtc,
+      dailyHourIst: utcToIst(initialDailyHourUtc),
     },
   });
 
-  const watchedHour = watch("dailyHourUtc");
-  const istHour = istanbulHour(Number(watchedHour) || 0);
+  const watchedIstHour = Number(watch("dailyHourIst")) || 0;
+  const utcHourPreview = istToUtc(watchedIstHour);
 
-  function onSubmit(values: SaveScheduleInput) {
+  function onSubmit(values: FormValues) {
     setMessage(null);
+    const istHour = Number(values.dailyHourIst);
+    const utcHour = istToUtc(istHour);
     startTransition(async () => {
       const result = await saveSchedule({
-        supplierSlug: values.supplierSlug,
+        supplierSlug,
         enabled: values.enabled,
-        dailyHourUtc: Number(values.dailyHourUtc),
+        dailyHourUtc: utcHour,
       });
       if (result.ok) {
-        setMessage({ kind: "success", text: `Ayar kaydedildi. ${formatNextRun(result.nextRunAt)}` });
-        reset({
-          supplierSlug: values.supplierSlug,
-          enabled: values.enabled,
-          dailyHourUtc: Number(values.dailyHourUtc),
+        setMessage({
+          kind: "success",
+          text: `Ayar kaydedildi. ${formatNextRun(result.nextRunAt)}`,
         });
+        reset({ enabled: values.enabled, dailyHourIst: istHour });
       } else {
         setMessage({ kind: "error", text: result.message });
       }
@@ -93,8 +96,6 @@ export function ScheduleForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <input type="hidden" {...register("supplierSlug")} />
-
       <label className="flex items-center gap-3 text-sm text-stone-700">
         <input
           type="checkbox"
@@ -109,11 +110,11 @@ export function ScheduleForm({
           htmlFor={`hour-${supplierSlug}`}
           className="block text-sm font-medium text-stone-700"
         >
-          Günlük saat (UTC)
+          Günlük saat (Türkiye)
         </label>
         <select
           id={`hour-${supplierSlug}`}
-          {...register("dailyHourUtc", { valueAsNumber: true })}
+          {...register("dailyHourIst", { valueAsNumber: true })}
           className="block w-32 rounded-md border-stone-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         >
           {HOUR_OPTIONS.map((h) => (
@@ -123,7 +124,7 @@ export function ScheduleForm({
           ))}
         </select>
         <p className="text-xs text-stone-500">
-          {pad(Number(watchedHour) || 0)}:00 UTC = {pad(istHour)}:00 İstanbul
+          {pad(watchedIstHour)}:00 İstanbul = {pad(utcHourPreview)}:00 UTC
         </p>
       </div>
 
