@@ -17,7 +17,9 @@ export type ScrapeRunRow = {
   triggerType: ScrapeRunTriggerType;
   errorMessage: string | null;
   ordersInserted: number;
+  ordersSkipped: number;
   itemsInserted: number;
+  itemsSkipped: number;
   snapshotsAdded: number;
   errorsCount: number;
   errorDetails: Array<{
@@ -30,7 +32,9 @@ export type ScrapeRunRow = {
 
 type SummaryShape = {
   orders_inserted?: number;
+  orders_skipped?: number;
   items_inserted?: number;
+  items_skipped?: number;
   snapshots_added?: number;
   errors?: Array<{
     step?: string;
@@ -67,7 +71,9 @@ export async function listRecentRuns(
       triggerType: row.trigger_type as ScrapeRunTriggerType,
       errorMessage: row.error_message,
       ordersInserted: Number(summary.orders_inserted ?? 0),
+      ordersSkipped: Number(summary.orders_skipped ?? 0),
       itemsInserted: Number(summary.items_inserted ?? 0),
+      itemsSkipped: Number(summary.items_skipped ?? 0),
       snapshotsAdded: Number(summary.snapshots_added ?? 0),
       errorsCount: errors.length,
       errorDetails: errors.map((e) => ({
