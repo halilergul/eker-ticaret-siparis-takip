@@ -57,10 +57,6 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
         run: npx playwright install --with-deps chromium
 
-      - name: Run order scrape
+      - name: Run scrape (order + catalog combined)
         if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
-        run: npm run scrape -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"
-
-      - name: Run catalog scrape
-        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
-        run: npm run scrape:catalog -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"
+        run: npm run scrape:all -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"

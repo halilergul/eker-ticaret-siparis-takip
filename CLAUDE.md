@@ -162,21 +162,18 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `007-scrape-automation`
-- Spec: [specs/007-scrape-automation/spec.md](specs/007-scrape-automation/spec.md)
-- Plan: [specs/007-scrape-automation/plan.md](specs/007-scrape-automation/plan.md)
-- Research: [specs/007-scrape-automation/research.md](specs/007-scrape-automation/research.md)
-- Data model: [specs/007-scrape-automation/data-model.md](specs/007-scrape-automation/data-model.md)
-- Contracts: [specs/007-scrape-automation/contracts/](specs/007-scrape-automation/contracts/) (scrape-schedule-table, save-schedule-server-action, scrape-trigger-server-action, workflow-dispatch-api, scrape-yml-workflow)
-- Quickstart (manuel test): [specs/007-scrape-automation/quickstart.md](specs/007-scrape-automation/quickstart.md)
+**Aktif feature**: yok — 007 tamamlandı, sıradaki feature için `/speckit-specify` ile başlat
 
-**Önceki feature'lar** (tamamlandı, push edildi):
+**Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
 - `002-enderyapi-scraper-poc` — [spec](specs/002-enderyapi-scraper-poc/spec.md) (PoC Senaryo A)
 - `003-supabase-schema` — [spec](specs/003-supabase-schema/spec.md) (5 tablo + RLS + RPC + types)
 - `004-enderyapi-scraper-prod` — [spec](specs/004-enderyapi-scraper-prod/spec.md) (US1+US3; US2 006'ya ertelendi)
 - `005-orders-dashboard` — [spec](specs/005-orders-dashboard/spec.md) (sipariş listesi + filter + detay; KDV-aware UI)
 - `006-price-changes-dashboard` — [spec](specs/006-price-changes-dashboard/spec.md) (catalog scrape + zamlanan ürünler UI)
+- `007-scrape-automation` — [spec](specs/007-scrape-automation/spec.md) (settings UI + workflow_dispatch + GH Actions cron + GitHub Secrets göçü; **G15 kapandı**)
+
+**Prod URL**: https://eker-ticaret-siparis-takip.vercel.app
 
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.
