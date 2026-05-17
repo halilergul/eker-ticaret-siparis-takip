@@ -1,9 +1,13 @@
 import { ScrapeError } from "./errors";
 import type { Adapter } from "./types";
 import { enderyapiAdapter } from "./adapters/enderyapi";
+import { ikizlerAdapter } from "./adapters/ikizler";
+import { leventsimsekAdapter } from "./adapters/leventsimsek";
 
 export const adapters: Record<string, Adapter> = {
   enderyapi: enderyapiAdapter,
+  ikizler: ikizlerAdapter,
+  leventsimsek: leventsimsekAdapter,
 };
 
 export function getAdapter(slug: string): Adapter {
