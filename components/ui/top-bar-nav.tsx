@@ -7,6 +7,7 @@ import { ROUTES } from "@/lib/routes";
 const NAV_ITEMS = [
   { href: ROUTES.DASHBOARD, label: "Siparişler", matchExact: true },
   { href: ROUTES.PRICE_CHANGES, label: "Zamlananlar", matchExact: false },
+  { href: ROUTES.SETTINGS, label: "Ayarlar", matchExact: false },
 ] as const;
 
 export function TopBarNav() {

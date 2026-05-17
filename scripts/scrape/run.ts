@@ -27,6 +27,7 @@ import {
   partialRun,
   failRun,
   abortRun,
+  updateScheduleCache,
 } from "@/lib/scraper/run-logger";
 import {
   emptySummary,
@@ -38,6 +39,8 @@ dotenv.config({ path: ".env.local" });
 
 const GLOBAL_TIMEOUT_MS = Number(process.env.TIMEOUT_OVERRIDE_MS) || 5 * 60 * 1000;
 
+type TriggerType = "auto" | "manual" | "unknown";
+
 type Args = {
   supplier?: string;
   headed: boolean;
@@ -45,6 +48,7 @@ type Args = {
   limit?: number;
   skipCatalog: boolean;
   help: boolean;
+  triggerType: TriggerType;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -53,6 +57,7 @@ function parseArgs(argv: string[]): Args {
     verbose: false,
     skipCatalog: false,
     help: false,
+    triggerType: "unknown",
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -62,6 +67,13 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--skip-catalog") args.skipCatalog = true;
     else if (a === "--supplier") {
       args.supplier = argv[++i];
+    } else if (a === "--trigger-type") {
+      const value = argv[++i] ?? "";
+      if (value !== "auto" && value !== "manual" && value !== "unknown") {
+        console.error(`[scrape] --trigger-type geçersiz: ${value} (auto|manual|unknown bekleniyor)`);
+        process.exit(2);
+      }
+      args.triggerType = value;
     } else if (a === "--limit") {
       args.limit = parseInt(argv[++i] ?? "", 10);
       if (!Number.isFinite(args.limit) || args.limit <= 0) {
@@ -90,6 +102,7 @@ Argümanlar:
   --verbose             Her adımı log'lar
   --limit <n>           En yeni N sipariş ile sınırla
   --skip-catalog        Katalog enrichment'i atla (sadece sipariş yansıt)
+  --trigger-type <t>    auto | manual | unknown (default unknown). Workflow'dan geçirilir.
   --help                Bu mesajı göster
 
 Kayıtlı tedarikçiler:
@@ -126,7 +139,7 @@ async function runScrape(args: Args): Promise<void> {
   const supplierId = await getSupplierIdBySlug(args.supplier);
 
   // scrape_runs row başlat
-  const runId = await startRun(supplierId);
+  const runId = await startRun(supplierId, args.triggerType);
   const summary: ScrapeSummary = emptySummary();
   const debugDir = path.join("scrape-debug", runId);
 
@@ -260,18 +273,27 @@ async function runScrape(args: Args): Promise<void> {
       printSummary(summary);
       console.log(`[scrape] ⚠ Kısmi başarı (${summary.errors.length} hata) — ${timeStr}`);
       await partialRun(runId, summary);
+      if (args.triggerType === "auto") {
+        await updateScheduleCache(supplierId, "partial").catch(() => undefined);
+      }
       process.exit(0);
     } else if (summary.errors.length > 0) {
       console.log("[scrape] Özet:");
       printSummary(summary);
       console.log(`[scrape] ❌ Başarısız (${summary.errors.length} hata) — ${timeStr}`);
       await failRun(runId, `${summary.errors.length} hata kaydedildi`, summary);
+      if (args.triggerType === "auto") {
+        await updateScheduleCache(supplierId, "failed").catch(() => undefined);
+      }
       process.exit(1);
     } else {
       console.log("[scrape] Özet:");
       printSummary(summary);
       console.log(`[scrape] ✅ Başarılı (${timeStr})`);
       await succeedRun(runId, summary);
+      if (args.triggerType === "auto") {
+        await updateScheduleCache(supplierId, "success").catch(() => undefined);
+      }
       process.exit(0);
     }
   } catch (err) {
@@ -290,6 +312,9 @@ async function runScrape(args: Args): Promise<void> {
     process.stderr.write(formatted.stderr);
 
     await failRun(runId, scrapeError.message, summary).catch(() => undefined);
+    if (args.triggerType === "auto") {
+      await updateScheduleCache(supplierId, "failed").catch(() => undefined);
+    }
 
     // Login fail → exit 3; diğer fatal → 1
     if (scrapeError.mode === "login-failed" || scrapeError.mode === "2fa-required" || scrapeError.mode === "captcha") {

@@ -160,3 +160,21 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Backend / Postgres
 - **Detay:** "Son N gün içinde fiyatı değişen ürünleri listele" sorgusunda her ürün için iki snapshot karşılaştırılması gerek (pencerenin başındaki + sonundaki). Naif yaklaşım her ürün için iki ayrı query (n+1 problemi) veya tüm snapshot'ları JS'e çek + grupla (transfer + memory). En temiz yol: `ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY captured_at ASC/DESC)` ile CTE'de `rn=1 (latest)` + `rn=1 ASC (oldest)` projection.
 - **Çözüm/Önlem:** 006'da `get_price_changes(window_days)` RPC fonksiyonu bu deseni kullanıyor — bkz. `supabase/migrations/<ts>_create_get_price_changes_rpc.sql`. `SECURITY INVOKER + SET search_path = public, pg_temp` zorunlu (003/004 deseni).
+
+### GitHub `workflow_dispatch` 204 No Content — run ID dönmez
+- **Tarih:** 2026-05-17
+- **Konu:** Backend / GitHub API
+- **Detay:** `POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches` başarılı olduğunda **204 No Content** döner; response body boş. Tetiklenen workflow run'ın ID'sini cevaptan alamayız → UI'da "Hangi koşumu izliyoruz?" sorusu için optimistic INSERT şart.
+- **Çözüm/Önlem:** 007'de `app/actions/trigger-scrape.ts` `dispatchScrapeWorkflow` çağrısının ardından **hemen** `scrape_runs` INSERT (`status='running', trigger_type='manual'`). Workflow saniyeler sonra başlayıp **kendi** scrape_runs satırını da yazıyor (mevcut `run.ts` `startRun()` deseni). Pratik etkisi: kullanıcı manuel tetikleme sonrasında iki satır görebilir; eski "phantom" satır 5 dk sonra `aborted` durumuna düşer (timeout) — V1 için kabul edilebilir. Refactor opsiyonu: Server Action sadece dispatch atsın, scrape_runs INSERT workflow'a kalsın; UI "queued" durumunu GitHub API `list workflow runs` ile takip etsin.
+
+### Fine-grained PAT scope — `Actions: Read and write`, repo-scoped
+- **Tarih:** 2026-05-17
+- **Konu:** Güvenlik / GitHub Secrets
+- **Detay:** Server Action'dan workflow tetiklemek için classic PAT kullanmak büyük blast radius (tüm repo'lara erişir). Fine-grained PAT ile sadece bu repo + sadece Actions permission verilebilir.
+- **Çözüm/Önlem:** GitHub > Settings > Developer settings > Personal access tokens > Fine-grained tokens > Generate. Repository access: **Only select repositories** → `eker-ticaret`. Permissions: **Actions: Read and write**. Expiration: 90 gün (rotasyon planı). Vercel env'e `GITHUB_PAT` olarak ekle, Production + Preview için. PAT sızsa bile sadece bu repo'nun workflow'u tetikleyebilir; commit/push/issue erişimi yok.
+
+### Cron `exit 78` deseni — GH Actions step skip ama workflow status success
+- **Tarih:** 2026-05-17
+- **Konu:** Otomasyon / GitHub Actions
+- **Detay:** Saatte 1 cron ile çalışan workflow her saat tetikleniyor ama DB'de saat eşleşmediği saatlerde scrape çalışmamalı. GH Actions'ta "neutral" step yok; step başarısız olursa workflow status `failed` olur — DB'ye gereksiz `failed` koşum yazılır (ya da scrape_runs satırı oluşmaz ama UI'da bu koşum hiç görünmez). Şart: scrape başlamadan **erken çıkış**.
+- **Çözüm/Önlem:** `scripts/scrape/check-schedule.ts` exit 78 döner (skip). Sonraki step'ler `if: steps.check.outcome == 'success'` ile gate'lenir → step skip olur ama workflow tamamı `success` durumunda kalır. `exit 1` yerine `exit 78` kullan; `exit 0` continue, `exit 78` skip, `exit 1` gerçek hata. Detay: 007 `.github/workflows/scrape.yml`.

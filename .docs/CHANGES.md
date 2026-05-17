@@ -144,3 +144,29 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 - **Bilinen kısıtlama**: Enderyapı catalog URL pattern'ı + DOM selector'ları **henüz keşfedilmedi** — adapter'da 4 candidate URL ve label-based xpath extraction var. Kullanıcı `npm run scrape:catalog -- --supplier enderyapi --product-code "118 049" --headed --verbose` ile iteratif test ederek selector'ları doğrulayacak.
 - **Doğrulama**: `npx tsc --noEmit` clean ✅; `npm run build` clean ✅ (`/dashboard/price-changes` 107 kB, `/dashboard/products/[id]` 106 kB First Load JS); advisor'larda yeni SECURITY uyarısı yok (sadece INFO `order_items_product_id_idx unused`, catalog scrape backfill sonrası dolacak).
 - **Durum**: Kod scaffolding tamam, **catalog DOM keşfi + manuel QS** kullanıcı eylemine bağlı.
+
+### CR-007 — Feature 007-scrape-automation
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** Son kullanıcı (Eker Ticaret çalışanı) terminal kullanmadan UI üzerinden scrape'i yönetebilsin: günlük saat seçer + aç/kapa toggle + "Şimdi tetikle" butonu + son 10 koşum geçmişi (otomatik/manuel ayrımı + hata detayı). Spec: [specs/007-scrape-automation/spec.md](../specs/007-scrape-automation/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni migration:** `supabase/migrations/20260517100340_scrape_schedule_table.sql` (1 satır seed: Enderyapı, enabled=false, hour=9), `supabase/migrations/20260517100341_scrape_runs_trigger_type.sql` (text + CHECK).
+  - **Yeni Server Actions:** `app/actions/trigger-scrape.ts`, `app/actions/save-schedule.ts`.
+  - **Yeni helper'lar:** `lib/github/workflow-dispatch.ts` (PAT fetch wrapper), `lib/queries/scrape-schedule.ts` (listSchedules + calculateNextRunAt), `lib/queries/scrape-runs.ts` (listRecentRuns + redactSecrets), `lib/validations/schedule-form.ts` (zod).
+  - **Yeni UI:** `app/(app)/dashboard/settings/page.tsx`, `components/features/settings/` (5 dosya: SupplierScheduleCard, ScheduleForm, TriggerNowButton, RecentRunsList, RunErrorDetails).
+  - **Yeni workflow:** `.github/workflows/scrape.yml` (cron `0 * * * *` + workflow_dispatch + concurrency.group + hour-gating).
+  - **Yeni script:** `scripts/scrape/check-schedule.ts` (exit 0/78/1 ile cron skip kontrolü).
+  - **Değişiklik:** `lib/scraper/run-logger.ts` (startRun signature + updateScheduleCache helper), `scripts/scrape/run.ts` (--trigger-type flag + auto-trigger sonunda cache update), `components/ui/top-bar-nav.tsx` (Ayarlar linki), `lib/routes.ts` (SETTINGS), `lib/format/date.ts` (formatTrDateTime), `lib/supabase/database.types.ts` (regen), `.env.example` (GITHUB_PAT/OWNER/REPO).
+- **Mimari kararlar:**
+  - Manuel tetikleme: Vercel Server Action → GitHub REST `workflow_dispatch` (research R1).
+  - Cron: saatte 1 GH Actions cron + DB hour-gating (research R2; G16 ile uyumlu).
+  - Concurrency: GH `concurrency.group: scrape-${supplier}` + Server Action DB-side "running koşum var mı?" check (R3).
+  - Secrets göçü: B2B credentials + service role key → **GitHub Repo Secrets**; fine-grained PAT → Vercel env (R4; G15 kapanır).
+  - `scrape_schedule` 1 satır/tedarikçi (R5), `trigger_type` text + CHECK (R6).
+  - UI: manuel refresh + revalidatePath (R7); auto-poll yok (sıfır maliyet).
+  - Saat dilimi: DB'de `daily_hour_utc` UTC; UI hem UTC hem Türkiye gösterir (R8).
+  - Test: quickstart-driven manuel; Vitest setup V2'ye (R10).
+- **Etki analizi:** ~4 saat (spec + plan + research + tasks + code). 39 task'tan 24 kod task'ı tamam; **manuel kullanıcı eylemleri (T018, T027, T030, T031-T033, T038-T039)** Vercel deploy + GitHub Secrets/Vercel env set sonrasına bırakıldı. Constitution gates tümü ✅ (G15 kapanır).
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; ESLint sadece 006'dan kalan 2 pre-existing warning (yeni kod temiz); credential leak grep 0 finding ✅.
+- **Durum**: Kod ve workflow tamam. Vercel env + GitHub Secrets ayarlandıktan sonra Test 1-8 manuel doğrulama bekliyor.
+
