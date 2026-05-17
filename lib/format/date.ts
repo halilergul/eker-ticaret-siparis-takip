@@ -1,7 +1,10 @@
+const TR_TIMEZONE = "Europe/Istanbul";
+
 const dateFormatter = new Intl.DateTimeFormat("tr-TR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
+  timeZone: TR_TIMEZONE,
 });
 
 const dateTimeFormatter = new Intl.DateTimeFormat("tr-TR", {
@@ -10,6 +13,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("tr-TR", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: TR_TIMEZONE,
 });
 
 const relativeFormatter = new Intl.RelativeTimeFormat("tr-TR", {
