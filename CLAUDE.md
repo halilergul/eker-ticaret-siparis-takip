@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `008-multi-supplier-orders` — [plan](specs/008-multi-supplier-orders/plan.md) (İkizler + Levent Şimşek adapter'ları, sipariş scrape)
+**Aktif feature**: yok — 008 tamamlandı, sıradaki feature için `/speckit-specify` ile başlat (öneriler: 009 catalog scrape, 010 e-posta bildirim)
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
@@ -172,6 +172,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - `005-orders-dashboard` — [spec](specs/005-orders-dashboard/spec.md) (sipariş listesi + filter + detay; KDV-aware UI)
 - `006-price-changes-dashboard` — [spec](specs/006-price-changes-dashboard/spec.md) (catalog scrape + zamlanan ürünler UI)
 - `007-scrape-automation` — [spec](specs/007-scrape-automation/spec.md) (settings UI + workflow_dispatch + GH Actions cron + GitHub Secrets göçü; **G15 kapandı**)
+- `008-multi-supplier-orders` — [spec](specs/008-multi-supplier-orders/spec.md) (İkizler + Levent Şimşek adapter'ları; sipariş scrape; catalog 009'a ertelendi)
 
 **Prod URL**: https://eker-ticaret-siparis-takip.vercel.app
 

@@ -178,3 +178,33 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Otomasyon / GitHub Actions
 - **Detay:** Saatte 1 cron ile çalışan workflow her saat tetikleniyor ama DB'de saat eşleşmediği saatlerde scrape çalışmamalı. GH Actions'ta "neutral" step yok; step başarısız olursa workflow status `failed` olur — DB'ye gereksiz `failed` koşum yazılır (ya da scrape_runs satırı oluşmaz ama UI'da bu koşum hiç görünmez). Şart: scrape başlamadan **erken çıkış**.
 - **Çözüm/Önlem:** `scripts/scrape/check-schedule.ts` exit 78 döner (skip). Sonraki step'ler `if: steps.check.outcome == 'success'` ile gate'lenir → step skip olur ama workflow tamamı `success` durumunda kalır. `exit 1` yerine `exit 78` kullan; `exit 0` continue, `exit 78` skip, `exit 1` gerçek hata. Detay: 007 `.github/workflows/scrape.yml`.
+
+### ESLint `no-explicit-any` Next.js production build'i fail eder (`tsc --noEmit` geçer)
+- **Tarih:** 2026-05-17
+- **Konu:** Frontend / Next.js / ESLint
+- **Detay:** `npx tsc --noEmit` ile TypeScript kontrolü temiz geçen kod, `next build` adımında ESLint çalıştığında `@typescript-eslint/no-explicit-any` kuralı `as any` cast'lerine error veriyor (warning değil) → build fail → Vercel preview deploy ❌. Yerel'de `tsc` geçtiği için fark edilmesi zor; CI/deploy'da görünür.
+- **Çözüm/Önlem:** `as any` yerine concrete type assertion kullan: `as HTMLInputElement`, `as HTMLFormElement | null` gibi. Özellikle `page.evaluate` sandbox kodu içinde DOM Element type'ları `Element` döner ama `.value`/`.form` özellikleri yok → HTMLInputElement cast şart. Deploy öncesi `npm run build` yerel'de çalıştırmak en sağlam check (tsc tek başına yetersiz).
+
+### dotenv `<...>` veya `<"..."` ile sarmalanmış değerleri "olduğu gibi" parse eder
+- **Tarih:** 2026-05-17
+- **Konu:** Environment / dotenv
+- **Detay:** `KEY="value"` formatında çift tırnak dotenv tarafından **silinir** (içerik temiz string olur). Ama `KEY=<"value">` formatında **değer `<` ile başlıyorsa** dotenv "bu tırnaklı string değil" diyor ve `<"value">` ifadesini tüm karakterleriyle string olarak alıyor. Placeholder formatı `<your_username>` gibi olan template'lerden değer kopyalanırken `< >` çıkartılmazsa B2B login "kullanıcı bulunamadı" döner — silent failure (PHP/ASP.NET siteler genelde silent redirect yapar yanlış giriş'te).
+- **Çözüm/Önlem:** `.env.local`'da credentials'ı **tırnak ve angle bracket olmadan** yaz: `IKIZLER_USERNAME=EKERTİCARET` veya `IKIZLER_USERNAME="EKERTİCARET"` ✓; `IKIZLER_USERNAME=<EKERTİCARET>` ✗ değer `<EKERTİCARET>` olur. Sezgi: değerin gerçek uzunluğu beklediğinden fazlaysa muhtemelen sarmalayıcı karakter sızmış. Diagnostic yöntem: bir log satırı atan tanı script'i (`console.log("uzunluk=", username.length)`) credentials'ı log'lamadan format problemi'ni yakalar.
+
+### Playwright `force: true` görünmez form elementleri için yetersiz — DOM evaluate gerek
+- **Tarih:** 2026-05-17
+- **Konu:** Scraping / Playwright
+- **Detay:** Navbar dropdown veya modal içinde gizli (`display: none`, `visibility: hidden`, veya `offsetParent === null`) form alanlarına Playwright `locator.fill({ force: true })` ve `locator.click({ force: true })` bile "Element is not visible" hatası verebiliyor. Levent Şimşek B2B sitesinde login form'u desktop+mobile navbar dropdown'ında render ediliyor, sayfa açıldığında DOM'da var ama `visible=false`. `force` actionability check'in bir kısmını atlar ama tamamını değil.
+- **Çözüm/Önlem:** `page.evaluate` ile sandbox JS'te direkt DOM manipulation: `document.querySelectorAll(selector).forEach(el => { (el as HTMLInputElement).value = X; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); })`. Form submit için `pwd.form.requestSubmit()` (HTML5 validation çalıştırır, submit event listener'ları tetikler) veya `pwd.form.submit()` (sadece bare submit). Dikkat: tsx/esbuild evaluate body'sinde `Object.getOwnPropertyDescriptor(...).set` setter dansı kullanırsan `__name is not defined` hatası — basit `el.value = X` ataması yeterli.
+
+### Adapter detay parse: pozisyon-bazlı heuristic'ten daha güvenilir
+- **Tarih:** 2026-05-17
+- **Konu:** Scraping / Adapter pattern
+- **Detay:** İkizler sipariş detay tablosunda miktar "12,00" formatında — yani TR fiyat regex `[\d.]+,\d{2}` ile **eşleşiyor**. Heuristic parse logic'i miktarı fiyat olarak alıp `quantity=0` bırakıyor → satır atlanıyor (`!quantity || quantity <= 0` guard). Sonuç: 13 sipariş × 5 ürün gerçek satır, sadece 4 satır parse oluyor. Heuristic regex'ler "qty vs price" ayrımı yaparken format örtüşürse sessizce hata yapar.
+- **Çözüm/Önlem:** Site DOM tablosu sabit format'taysa **pozisyon-bazlı parse** tercih et: `productCode = cells[0]; productName = cells[1]; quantity = parseTrPrice(cells[2]); unitPrice = parseTrPrice(cells[3])`. parseTrPrice hem "12,00" hem "1.140,00" parse ediyor (sayı/fiyat ayrımı yok, ikisi de sayı). Heuristic parse sadece tablo formatı değişken olduğunda kullan. Discovery sırasında bir kez sabit pozisyonları doğrula, sonra ona göre kod yaz.
+
+### Sipariş listesinde order_no yok — modal-based detay (Bootstrap pattern)
+- **Tarih:** 2026-05-17
+- **Konu:** Scraping / Modal UI
+- **Detay:** Levent Şimşek sipariş listesi 3 sütun: durum+tarih, ödeme+tutar, "Detaylar"+"İptal" butonları. Site sipariş'lere **kod vermemiş listede** — gerçek kod `LIS29125T2446` sadece "Detaylar" butonuna basıldığında açılan Bootstrap modal'da görünür. listOrders sadece header'ları parse edip detail için ayrı bir `getOrderDetail` çağırması yetmez; modal aç → parse → kapat döngüsü gerekir.
+- **Çözüm/Önlem:** Adapter modülünde **module-level cache** (`const detailCache = new Map<orderNo, items[]>()`). `listOrders` her satır için Detaylar butonuna tıklar (`force: true` çünkü `javascript:void(0)` link), modal açılana kadar bekler (`.modal.show` selector), order code regex'le çıkarır, ürün tablosunu parse eder, cache'e koyar, modal'ı kapatır (Kapat butonu veya ESC), sonraki satıra fresh locator ile geçer. `getOrderDetail` cache'ten okur — DOM nav yok, hızlı. Module-level Map adapter interface'ini değiştirmiyor; tek scrape:all run'ı süresince active. **Idempotency** korunur: yeniden çalıştırırsan cache temizlenir + DB UNIQUE constraint zaten duplicate'leri engeller.
