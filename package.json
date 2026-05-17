@@ -11,6 +11,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json,css}\"",
     "scrape": "tsx scripts/scrape/run.ts",
     "scrape:catalog": "tsx scripts/scrape/catalog.ts",
+    "scrape:all": "tsx scripts/scrape/all.ts",
     "scrape:enderyapi": "tsx scripts/scrape/enderyapi.ts"
   },
   "dependencies": {
