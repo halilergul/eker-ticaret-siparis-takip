@@ -170,3 +170,20 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 - **Doğrulama**: `npx tsc --noEmit` clean ✅; ESLint sadece 006'dan kalan 2 pre-existing warning (yeni kod temiz); credential leak grep 0 finding ✅.
 - **Durum**: Kod ve workflow tamam. Vercel env + GitHub Secrets ayarlandıktan sonra Test 1-8 manuel doğrulama bekliyor.
 
+### CR-008 — Feature 008-multi-supplier-orders (sipariş scrape iskelet tamam)
+- **Tarih:** 2026-05-17
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** İki yeni B2B tedarikçinin sipariş geçmişi entegrasyonu: **İkizler Hırdavat** (http://bayi.ikizlerhirdavat.com — HTTP) ve **Levent Şimşek Armatür** (https://liste.leventsimsekarmatur.com — HTTPS). Catalog scrape (güncel fiyat) bu feature'da YOK — 009'a ertelendi. Spec: [specs/008-multi-supplier-orders/spec.md](../specs/008-multi-supplier-orders/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni migration:** `supabase/migrations/20260517110015_seed_ikizler_leventsimsek.sql` (2 satır: ikizler + leventsimsek), `supabase/migrations/20260517110026_seed_schedule_ikizler_leventsimsek.sql` (2 satır scrape_schedule, disabled, hour=9). Idempotent (ON CONFLICT). Production DB'ye uygulandı.
+  - **Yeni adapter modülleri:** `lib/scraper/adapters/ikizler.ts` + `ikizler.constants.ts`, `lib/scraper/adapters/leventsimsek.ts` + `leventsimsek.constants.ts`. Her ikisi de enderyapı pattern'i ile aynı: login + listOrders + getOrderDetail + getProductPrice (placeholder, catalog 009'da). Selector havuzları best-guess (ASP.NET MVC + PHP konvansiyonları) — DOM keşfi sırasında refine edilecek.
+  - **Değişiklik:** `lib/scraper/adapter-registry.ts` (2 import + 2 map entry), `.github/workflows/scrape.yml` (supplier choice options expand to 3 + 4 yeni env mapping), `.env.example` (IKIZLER + LEVENTSIMSEK placeholders).
+- **Mimari kararlar:**
+  - Per-adapter constants dosyası pattern'i (`<slug>.constants.ts`) — namespace çatışmasından kaçınmak için (research R-001). Constitution'a 2026-05-17 satırı eklendi.
+  - HTTP plaintext (İkizler) riski kullanıcı tarafından kabul edildi — ek mitigation yok (FR-012, Constitution).
+  - getProductPrice metodu placeholder (`return null`) — catalog 009'a ertelendi (research R-006).
+  - Workflow_dispatch supplier input listesi `[enderyapi, ikizler, leventsimsek]` olarak genişletildi — UI Server Action'ın yeni slug'ları tetikleyebilmesi için zorunlu (R-005).
+- **Etki analizi:** ~3 saat plan/spec/contracts; ~1 saat adapter scaffolding; **DOM keşfi (T010-T012, T022-T024 refine) kullanıcı tarafından yerel ortamda `--headed` mode ile yapılacak**. 39 task'tan 23 kod task'ı tamam (Phase 1+2+adapter scaffolds+adapter-registry+CONSTITUTION+CHANGES); kalan task'lar: kullanıcı manuel DOM keşfi + GitHub Secrets ekleme + production smoke (T014-T018, T026-T030, T031-T032).
+- **Doğrulama**: `npx tsc --noEmit` clean ✅; DB seed migrations idempotent verified (3 supplier rows, 3 schedule rows); workflow YAML reformatted correctly; credential leak scan 0 hardcoded finding.
+- **Durum**: Code scaffolding tamam. Kullanıcının yerel ortamda credentials ekleyip `--headed` smoke testleri yapması + selector refine etmesi + GitHub Secrets ekleyip production smoke alması bekleniyor.
+

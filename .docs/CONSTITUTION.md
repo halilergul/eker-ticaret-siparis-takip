@@ -71,6 +71,8 @@ _Her kararın tarihi ve gerekçesi tutulur_
 | 2026-05-17 | 007: Manuel "Şimdi tetikle" Server Action → GitHub `workflow_dispatch` API ile çalışır (Vercel env'inde fine-grained PAT) | Son kullanıcı (Eker Ticaret çalışanı, sıfır teknik) terminal kullanmaz; tek-tıkla UI üzerinden tetikleme zorunlu |
 | 2026-05-17 | 007: `scrape_schedule` tablosu (per-supplier `enabled` + `daily_hour_utc`) + saatlik cron + DB hour-gating | UI'dan ayarlanabilir; cron sabit, schedule DB'de — workflow file redeploy gerekmez |
 | 2026-05-17 | 007: B2B credentials + Supabase service role key **GitHub Repo Secrets**'a göç ettirildi | G15 prensibinin uygulanması; `.env.local` artık yalnızca dev için (B2B değerleri kaldırıldı) |
+| 2026-05-17 | 008: İkizler Hırdavat (`http://bayi.ikizlerhirdavat.com`) HTTP plaintext credential riski **kabul edildi** | Site HTTPS sertifikası sunmuyor; kullanıcı (Eker) açıkça kabul etti (spec FR-012). Ek mitigation yok; B2B kredensiyeli yalnız bu site için HTTP üzerinden gönderiliyor. |
+| 2026-05-17 | 008: Per-adapter constants dosyası pattern'i — `lib/scraper/adapters/<slug>.constants.ts` | İkinci ve üçüncü tedarikçi adapter'ı eklerken `scripts/scrape/constants.ts` (enderyapı-gömülü) namespace çatışması yarattı. Her adapter ile yan yana dosya: site-spesifik selector havuzu, base URL, login path'leri vb. Adapter dosyasının okunabilirliği korunur, yeni site eklemek minimal değişiklik. Eski `constants.ts` enderyapı için geriye-uyumlu olarak kalır. |
 
 ## Kısıtlar ve özel durumlar
 _Geliştirme sırasında ortaya çıkan kısıtlar buraya eklenir_
@@ -89,7 +91,7 @@ _Cevabı henüz netleşmemiş kararlar_
 - [ ] Analytics / izleme tercihleri (V1'de muhtemelen gerekmiyor; tek kullanıcı)
 - [ ] Auth yöntemi: magic link mi email/password mi? (`/speckit-specify` aşamasında netleşir)
 - [ ] Eklenecek diğer B2B siteleri listesi (kullanıcı zamanı geldikçe ekleyecek)
-- [ ] Fiyat değişim eşiği (örn. %1'den küçük dalgalanmaları "zam" sayma) — UI'da ayarlanabilir mi?
+- [x] ~~Fiyat değişim eşiği~~ → **Eşik yok**. En küçük değişim bile gösterilir. (2026-05-17 kararı, kullanıcı tercihi)
 - [ ] Bildirim: zamlı ürün tespit edilince e-posta/push mı, sadece dashboard üzerinde mi? (V1 muhtemelen sadece dashboard)
 
 ## Tasarım Yaklaşımı

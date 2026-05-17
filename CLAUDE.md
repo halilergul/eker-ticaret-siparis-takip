@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: yok — 007 tamamlandı, sıradaki feature için `/speckit-specify` ile başlat
+**Aktif feature**: `008-multi-supplier-orders` — [plan](specs/008-multi-supplier-orders/plan.md) (İkizler + Levent Şimşek adapter'ları, sipariş scrape)
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
