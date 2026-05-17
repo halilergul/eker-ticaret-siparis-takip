@@ -162,13 +162,13 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `006-price-changes-dashboard`
-- Spec: [specs/006-price-changes-dashboard/spec.md](specs/006-price-changes-dashboard/spec.md)
-- Plan: [specs/006-price-changes-dashboard/plan.md](specs/006-price-changes-dashboard/plan.md)
-- Research: [specs/006-price-changes-dashboard/research.md](specs/006-price-changes-dashboard/research.md)
-- Data model: [specs/006-price-changes-dashboard/data-model.md](specs/006-price-changes-dashboard/data-model.md)
-- Contracts: [specs/006-price-changes-dashboard/contracts/](specs/006-price-changes-dashboard/contracts/) (routes, data-queries, catalog-scraper)
-- Quickstart (manuel test): [specs/006-price-changes-dashboard/quickstart.md](specs/006-price-changes-dashboard/quickstart.md)
+**Aktif feature**: `007-scrape-automation`
+- Spec: [specs/007-scrape-automation/spec.md](specs/007-scrape-automation/spec.md)
+- Plan: [specs/007-scrape-automation/plan.md](specs/007-scrape-automation/plan.md)
+- Research: [specs/007-scrape-automation/research.md](specs/007-scrape-automation/research.md)
+- Data model: [specs/007-scrape-automation/data-model.md](specs/007-scrape-automation/data-model.md)
+- Contracts: [specs/007-scrape-automation/contracts/](specs/007-scrape-automation/contracts/) (scrape-schedule-table, save-schedule-server-action, scrape-trigger-server-action, workflow-dispatch-api, scrape-yml-workflow)
+- Quickstart (manuel test): [specs/007-scrape-automation/quickstart.md](specs/007-scrape-automation/quickstart.md)
 
 **Önceki feature'lar** (tamamlandı, push edildi):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
@@ -176,6 +176,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - `003-supabase-schema` — [spec](specs/003-supabase-schema/spec.md) (5 tablo + RLS + RPC + types)
 - `004-enderyapi-scraper-prod` — [spec](specs/004-enderyapi-scraper-prod/spec.md) (US1+US3; US2 006'ya ertelendi)
 - `005-orders-dashboard` — [spec](specs/005-orders-dashboard/spec.md) (sipariş listesi + filter + detay; KDV-aware UI)
+- `006-price-changes-dashboard` — [spec](specs/006-price-changes-dashboard/spec.md) (catalog scrape + zamlanan ürünler UI)
 
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan.

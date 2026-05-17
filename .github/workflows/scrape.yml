@@ -1,0 +1,65 @@
+name: Scrape
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Her saat başı (UTC). Workflow ilk step'i scrape_schedule.daily_hour_utc ile eşleşme kontrol eder.
+  workflow_dispatch:
+    inputs:
+      supplier:
+        description: 'Tedarikçi slug'
+        required: true
+        type: choice
+        options:
+          - enderyapi
+      trigger_type:
+        description: 'Tetikleme tipi'
+        required: false
+        type: choice
+        default: manual
+        options:
+          - manual
+
+concurrency:
+  group: scrape-${{ github.event.inputs.supplier || 'enderyapi' }}
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPPLIER: ${{ github.event.inputs.supplier || 'enderyapi' }}
+      TRIGGER_TYPE: ${{ github.event.inputs.trigger_type || (github.event_name == 'schedule' && 'auto' || 'manual') }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      ENDERYAPI_USERNAME: ${{ secrets.ENDERYAPI_USERNAME }}
+      ENDERYAPI_PASSWORD: ${{ secrets.ENDERYAPI_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check schedule (skip if hour mismatch / disabled)
+        id: check
+        if: github.event_name == 'schedule'
+        run: npx tsx scripts/scrape/check-schedule.ts --supplier "$SUPPLIER"
+
+      - name: Install Playwright Chromium
+        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run order scrape
+        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
+        run: npm run scrape -- --supplier "$SUPPLIER" --trigger-type "$TRIGGER_TYPE"
+
+      - name: Run catalog scrape
+        if: github.event_name == 'workflow_dispatch' || steps.check.outcome == 'success'
+        run: npm run scrape:catalog -- --supplier "$SUPPLIER"

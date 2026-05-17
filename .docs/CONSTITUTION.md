@@ -68,6 +68,9 @@ _Her kararın tarihi ve gerekçesi tutulur_
 | 2026-05-15 | B2B kimlik bilgileri **GitHub Secrets**'ta encrypted saklanır | Server-side scrape için gerekli; Supabase Vault da seçenek ama Actions ortamı için Secrets daha doğal |
 | 2026-05-15 | Auth: Supabase Auth, tek kullanıcı, magic link veya email/password | Public web'de dashboard'un açık durmaması için basit koruma |
 | 2026-05-15 | Otomatik scrape ayarı (saat + on/off) DB'de tutulur, GitHub Action saatlik tetiklenip kontrol eder | Cron schedule'ı koddan değiştirmek yerine UI'dan ayarlanabilirlik için |
+| 2026-05-17 | 007: Manuel "Şimdi tetikle" Server Action → GitHub `workflow_dispatch` API ile çalışır (Vercel env'inde fine-grained PAT) | Son kullanıcı (Eker Ticaret çalışanı, sıfır teknik) terminal kullanmaz; tek-tıkla UI üzerinden tetikleme zorunlu |
+| 2026-05-17 | 007: `scrape_schedule` tablosu (per-supplier `enabled` + `daily_hour_utc`) + saatlik cron + DB hour-gating | UI'dan ayarlanabilir; cron sabit, schedule DB'de — workflow file redeploy gerekmez |
+| 2026-05-17 | 007: B2B credentials + Supabase service role key **GitHub Repo Secrets**'a göç ettirildi | G15 prensibinin uygulanması; `.env.local` artık yalnızca dev için (B2B değerleri kaldırıldı) |
 
 ## Kısıtlar ve özel durumlar
 _Geliştirme sırasında ortaya çıkan kısıtlar buraya eklenir_

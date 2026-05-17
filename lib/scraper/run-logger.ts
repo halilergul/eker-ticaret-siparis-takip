@@ -10,7 +10,12 @@ export type ScrapeRunStatus =
   | "failed"
   | "aborted";
 
-export async function startRun(supplierId: string): Promise<string> {
+export type ScrapeRunTriggerType = "auto" | "manual" | "unknown";
+
+export async function startRun(
+  supplierId: string,
+  triggerType: ScrapeRunTriggerType = "unknown",
+): Promise<string> {
   const supabase = getServiceClient();
   const { data, error } = await supabase
     .from("scrape_runs")
@@ -18,6 +23,7 @@ export async function startRun(supplierId: string): Promise<string> {
       supplier_id: supplierId,
       status: "running",
       summary: {},
+      trigger_type: triggerType,
     })
     .select("id")
     .single();
@@ -88,4 +94,27 @@ export function abortRun(
     summary,
     errorMessage ?? "Global timeout (5dk) aşıldı",
   );
+}
+
+/**
+ * Otomatik koşum sonucunu scrape_schedule cache satırına yazar.
+ * Sadece trigger_type='auto' olduğunda çağrılır. Hata fırlatmaz.
+ */
+export async function updateScheduleCache(
+  supplierId: string,
+  status: Exclude<ScrapeRunStatus, "running">,
+): Promise<void> {
+  const supabase = getServiceClient();
+  const { error } = await supabase
+    .from("scrape_schedule")
+    .update({
+      last_auto_run_at: new Date().toISOString(),
+      last_auto_run_status: status,
+    })
+    .eq("supplier_id", supplierId);
+  if (error) {
+    console.error(
+      `[run-logger] scrape_schedule cache update failed: ${error.message}`,
+    );
+  }
 }

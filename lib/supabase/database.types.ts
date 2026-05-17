@@ -181,6 +181,7 @@ export type Database = {
           status: string
           summary: Json
           supplier_id: string
+          trigger_type: string
         }
         Insert: {
           created_at?: string
@@ -191,6 +192,7 @@ export type Database = {
           status?: string
           summary?: Json
           supplier_id: string
+          trigger_type?: string
         }
         Update: {
           created_at?: string
@@ -201,12 +203,54 @@ export type Database = {
           status?: string
           summary?: Json
           supplier_id?: string
+          trigger_type?: string
         }
         Relationships: [
           {
             foreignKeyName: "scrape_runs_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scrape_schedule: {
+        Row: {
+          created_at: string
+          daily_hour_utc: number
+          enabled: boolean
+          id: string
+          last_auto_run_at: string | null
+          last_auto_run_status: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          daily_hour_utc?: number
+          enabled?: boolean
+          id?: string
+          last_auto_run_at?: string | null
+          last_auto_run_status?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          daily_hour_utc?: number
+          enabled?: boolean
+          id?: string
+          last_auto_run_at?: string | null
+          last_auto_run_status?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrape_schedule_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: true
             referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
