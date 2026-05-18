@@ -233,3 +233,15 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Otomasyon / GitHub Actions
 - **Detay:** GitHub Actions 2020 sonrası exit code 78'i "neutral skip" olarak değil **failure** olarak yorumluyor → saatlik cron hour-mismatch durumunda her saatte 1 Failed workflow run + repo admin'e e-posta. Halil günde 22-23 mail aldı önceki düzeltme öncesi.
 - **Çözüm/Önlem:** `check-schedule.ts` artık her zaman `exit 0` ile çıkıyor; skip/continue kararı `GITHUB_OUTPUT` dosyasına `skip=true|false` yazılarak iletiliyor. Workflow YAML'de sonraki step'ler `if: steps.check.outputs.skip == 'false'` ile gate'lensin. Eski pattern `steps.check.outcome == 'success'` kullanılırsa exit 78'in failure yorumu nedeniyle her saat fail. Detay: 009 hotfix `fix(cron): exit 78 → output gating`.
+
+### Scrape orchestrator outer timeout `abortRun` çağırmıyordu — scrape_runs `running` takılıyor
+- **Tarih:** 2026-05-18
+- **Konu:** Otomasyon / Scrape runner
+- **Detay:** `scripts/scrape/all.ts` `main()` outer `Promise.race([runAll, timeoutPromise])` timeout fırlattığında `process.exit(4)` çağırıyordu ama `runAll` içindeki `runId` outer scope'a leak etmediği için **`abortRun` çağrılmıyordu**. Sonuç: `scrape_runs` satırı `status='running'` olarak takılı kalıyor (UI'da "Çalışıyor" badge'i hiç değişmiyor). Aynı dosyada `void abortRun;` ölü satırı bu izi taşıyordu — import edilmiş ama hiçbir yerde çağrılmamış.
+- **Çözüm/Önlem:** Modül scope'una `activeRun: { runId, summary, triggerType, supplierId } | null` ref'i ekle, `startRun` sonrası set, her finalize (succeed/partial/fail/catch) sonrası `null`'a çek. `main()` outer catch'inde `mode === "timeout"` dalı `abortRun(activeRun.runId, activeRun.summary, "Global outer timeout aşıldı")` + `updateScheduleCache(supplierId, "aborted")` çağırır, sonra `exit 4`. Pattern: **uzun süre çalışan async iş + outer race ile sonlandırma** = state cleanup'ı outer scope'tan görünür yere koy.
+
+### Playwright `getAttribute` / `textContent` default timeout 30 saniye — opsiyonel selector'larda explicit `{ timeout: N }` şart
+- **Tarih:** 2026-05-18
+- **Konu:** Tooling / Scraper performance
+- **Detay:** Enderyapı catalog scrape ürün başına ~10 sn sürüyordu (46 ürün → 7+ dk → outer timeout). Stage timing log ekledikten sonra **13 üründe `parse=30000ms exact`** görüldü → Playwright default `actionTimeout = 30s`. Marka probe `locator(\`[alt][title]\`).first().getAttribute("title")` kritik olmayan bir alandı ama bazı ürün sayfalarında bu element hiç yoktu → 30 sn bekliyor. Toplam kayıp: 13 × 30s = ~6.5 dk. Locator'lar her zaman explicit timeout'la çağrılmalı; özellikle "olabilir / olmayabilir" olan opsiyonel selector'larda.
+- **Çözüm/Önlem:** `getAttribute("title", { timeout: 1000 })`, `textContent({ timeout: 2000 })`. `try/catch` veya `.catch(() => null)` ile sarmalanmış olsa bile timeout default 30s'dir. Aynı kural `locator.click({ timeout })`, `waitFor({ timeout })` için geçerli. Adapter eklerken her async page operation'a timeout belirt. Stage timing log pattern (`Date.now()` delta + `console.log("[adapter-perf] code nav=Xms parse=Yms")`) darboğaz teşhisi için altın standart — geçici eklenir, ölçüm sonrası kaldırılır.
