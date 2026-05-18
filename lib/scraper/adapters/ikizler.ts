@@ -34,9 +34,16 @@ import {
   ORDER_LIST_SELECTORS,
   ORDER_DETAIL_SELECTORS,
   TIMEOUTS,
+  CATALOG_LISTING_URL,
+  CATALOG_PRICE_MODAL,
 } from "./ikizler.constants";
 
 import type { Page } from "playwright";
+
+import type {
+  CatalogScrapeResult,
+  CatalogScrapeTarget,
+} from "../types";
 
 async function tryFindSelector(
   page: Page,
@@ -518,6 +525,428 @@ async function getProductPrice(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// 009 — Catalog scrape
+// ---------------------------------------------------------------------------
+
+/**
+ * "95.000 TL" → 95.0 ; "1234.560 TL" → 1234.56
+ * JavaScript `.toFixed()` çıktısı: nokta=decimal, thousands separator YOK.
+ */
+function parseIkizlerPrice(raw: string | undefined | null): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const m = cleaned.match(/\d+(\.\d+)?/);
+  if (!m) return null;
+  const n = parseFloat(m[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * "KDV(20)" → 0.20 ; "KDV(0)" → 0 ; "KDV (10)" → 0.10
+ */
+function parseIkizlerVatRate(raw: string | undefined | null): number | null {
+  if (!raw) return null;
+  const m = raw.match(/(\d+(?:[.,]\d+)?)/);
+  const captured = m?.[1];
+  if (!captured) return null;
+  const n = parseFloat(captured.replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  return n / 100;
+}
+
+/** Direct navigate (cache hit) — başarılı mı? */
+async function navigateDirect(ctx: ScrapeContext, url: string): Promise<boolean> {
+  try {
+    const resp = await ctx.page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: TIMEOUTS.NAVIGATION_MS,
+    });
+    return resp !== null && resp.status() < 400;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cache miss: SearchText input'u POST submit eder, ilk detay linkine navigate eder.
+ * Başarılı navigation sonrasında detay URL'ini döner.
+ */
+async function searchAndOpenFirst(
+  ctx: ScrapeContext,
+  code: string,
+): Promise<string | null> {
+  const { page } = ctx;
+
+  // Search input mevcut sayfada yoksa listing'e git
+  let searchInput = page.locator('input[name="SearchText"]').first();
+  let exists = (await searchInput.count()) > 0;
+  if (!exists) {
+    try {
+      await page.goto(CATALOG_LISTING_URL, {
+        waitUntil: "domcontentloaded",
+        timeout: TIMEOUTS.NAVIGATION_MS,
+      });
+    } catch {
+      return null;
+    }
+    searchInput = page.locator('input[name="SearchText"]').first();
+    exists = (await searchInput.count()) > 0;
+  }
+  if (!exists) {
+    vlog(ctx, `catalog: SearchText input yok, search atlanır (${code})`);
+    return null;
+  }
+
+  // Native form submit (POST /Home/AramaSonuc)
+  try {
+    await page.evaluate((codeArg: string) => {
+      const inp = document.querySelector<HTMLInputElement>('input[name="SearchText"]');
+      if (!inp) return;
+      inp.value = codeArg;
+      inp.form?.submit();
+    }, code);
+    await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => undefined);
+    await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+  } catch {
+    return null;
+  }
+
+  // İlk detay linkini bul
+  const href = await page
+    .locator('a[href*="/Home/UrunDetay"]')
+    .first()
+    .getAttribute("href")
+    .catch(() => null);
+
+  if (!href) {
+    vlog(ctx, `catalog: search sonuç 0 (${code})`);
+    return null;
+  }
+
+  const fullUrl = href.startsWith("http")
+    ? href
+    : `${SITE_BASE_URL}${href.startsWith("/") ? "" : "/"}${href}`;
+
+  try {
+    await page.goto(fullUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: TIMEOUTS.NAVIGATION_MS,
+    });
+    return fullUrl;
+  } catch {
+    return null;
+  }
+}
+
+type ModalParseResult = {
+  productName: string | undefined;
+  listPrice: number | null;
+  unitPriceExclVat: number | null;
+  unitPriceWithVat: number | null;
+  vatRate: number | null;
+  discountText: string | null;
+};
+
+/**
+ * Detay sayfasında `.fiyatgoster` butonuna tıklar, modal'ı bekler, içerikten
+ * Liste/İskontolu/Net fiyat satırlarını parse eder. Modal'ı kapatır.
+ */
+async function openPriceModalAndExtract(
+  ctx: ScrapeContext,
+  code: string,
+): Promise<ModalParseResult | null> {
+  const { page } = ctx;
+
+  // Trigger'ı bul
+  const trigger = page.locator(CATALOG_PRICE_MODAL.TRIGGER).first();
+  if ((await trigger.count()) === 0) {
+    vlog(ctx, "catalog: .fiyatgoster trigger yok");
+    return null;
+  }
+
+  await trigger.scrollIntoViewIfNeeded().catch(() => undefined);
+
+  // Hem native click hem JS click yap (jQuery event handler için).
+  // Native click bazen DOM event tetikler ama jQuery `.click()` handler'ını
+  // çağırmaz — JS evaluate fallback bunu garantiler.
+  try {
+    await trigger.click({ force: true, timeout: 3_000 });
+  } catch {
+    /* fallback aşağıda */
+  }
+  // Garanti: jQuery handler'ı da fire et
+  await page
+    .evaluate(() => {
+      const el = document.querySelector(".fiyatgoster") as HTMLElement | null;
+      if (!el) return;
+      // jQuery varsa onun click event'ini de tetikle
+      const w = window as unknown as { $?: (sel: string) => { trigger: (e: string) => void; first: () => { trigger: (e: string) => void } } };
+      if (typeof w.$ === "function") {
+        try {
+          w.$(".fiyatgoster").first().trigger("click");
+        } catch {
+          el.click();
+        }
+      } else {
+        el.click();
+      }
+    })
+    .catch(() => undefined);
+
+  // Bootstrap modal animasyon süresi + JS modal content render süresi
+  await page.waitForTimeout(800).catch(() => undefined);
+
+  // Modal'ın content'inin dolmasını bekle — geniş selector (her modal'ı tara)
+  const ok = await page
+    .waitForFunction(
+      () => {
+        const candidates = document.querySelectorAll<HTMLElement>(
+          '[id*="Modal" i].show, [id*="modal" i].show, .modal.show, .modal.fade.show, [role="dialog"][style*="display: block"]',
+        );
+        for (const m of candidates) {
+          const t = m.textContent ?? "";
+          if (/Liste\s*Fiyat|Net\s*Fiyat/i.test(t)) return true;
+        }
+        // Productmodal ID specifik kontrol
+        const pm = document.querySelector("#productModalId");
+        if (pm) {
+          const t = pm.textContent ?? "";
+          if (/Liste\s*Fiyat|Net\s*Fiyat/i.test(t)) return true;
+        }
+        return false;
+      },
+      { timeout: 6_000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  if (!ok) {
+    // Debug dump — sonraki iterasyon için
+    try {
+      const html = await page.content();
+      const safe = code.replace(/[^a-zA-Z0-9-]/g, "_");
+      const fname = path.join(ctx.debugDir, `catalog-modal-miss-${safe}.html`);
+      await fs.writeFile(fname, html, "utf-8");
+      const pngFname = path.join(ctx.debugDir, `catalog-modal-miss-${safe}.png`);
+      await page.screenshot({ path: pngFname, fullPage: false }).catch(() => undefined);
+      vlog(ctx, `catalog: ${code} modal text yok → dump: ${fname}`);
+    } catch {
+      /* dump fail tolere */
+    }
+  }
+
+  // Modal'ı parse et — herhangi bir visible modal'ın içeriğini dene
+  const raw = await page.evaluate(() => {
+    const allModals = document.querySelectorAll<HTMLElement>(
+      '[id*="Modal" i].show, [id*="modal" i].show, .modal.show, .modal.fade.show, [role="dialog"]',
+    );
+    let modal: HTMLElement | null = null;
+    for (const m of allModals) {
+      const t = m.textContent ?? "";
+      if (/Liste\s*Fiyat|Net\s*Fiyat/i.test(t)) {
+        modal = m;
+        break;
+      }
+    }
+    if (!modal) {
+      modal = document.querySelector<HTMLElement>("#productModalId");
+    }
+    if (!modal) return null;
+
+    const rows = Array.from(modal.querySelectorAll<HTMLElement>(".row"));
+    const out: {
+      productLine?: string;
+      listPriceRaw?: string;
+      iskontoluRaw?: string;
+      netPriceRaw?: string;
+      kdvRaw?: string;
+      discountRaw?: string;
+    } = {};
+
+    for (const row of rows) {
+      const text = (row.textContent ?? "").replace(/\s+/g, " ").trim();
+      // Cell'leri label + value olarak ayır:
+      // - 6+6 (col-6 col-6) → standart
+      // - 6+2+2+2 (Net Fiyatı) → label / net / KDV(N) / birim
+      const colCells = Array.from(
+        row.querySelectorAll<HTMLElement>("[class*='col-']"),
+      );
+      const cellTexts = colCells.map((c) => (c.textContent ?? "").trim());
+
+      if (/^Ürün\s*:/.test(text) && cellTexts.length >= 2) {
+        // "Ürün :" / "<kod> - <ad>"
+        out.productLine = cellTexts[1];
+      } else if (/^İskonto\s*:/.test(text) &&
+                 !/Tutar/i.test(text) &&
+                 !/Fiyat/i.test(text) &&
+                 cellTexts.length >= 2) {
+        out.discountRaw = cellTexts[1];
+      } else if (/^Liste\s*Fiyat[ıi]?\s*:/.test(text) && cellTexts.length >= 2) {
+        out.listPriceRaw = cellTexts[1];
+      } else if (/^İskontolu\s*Fiyat\s*:/.test(text) && cellTexts.length >= 2) {
+        out.iskontoluRaw = cellTexts[1];
+      } else if (/^Net\s*Fiyat[ıi]?\s*:/.test(text) && cellTexts.length >= 3) {
+        // cells: [label, net price, KDV(N), birim?]
+        out.netPriceRaw = cellTexts[1];
+        out.kdvRaw = cellTexts[2];
+      }
+    }
+
+    return out;
+  });
+
+  // Modal'ı kapat (sonraki ürün için temiz state)
+  await page
+    .evaluate(() => {
+      const btn = document.querySelector<HTMLElement>(
+        '#productModalId [data-bs-dismiss="modal"]',
+      );
+      btn?.click();
+    })
+    .catch(() => undefined);
+  await page.waitForTimeout(150).catch(() => undefined);
+
+  if (!raw) return null;
+
+  const listPrice = parseIkizlerPrice(raw.listPriceRaw);
+  const iskontolu = parseIkizlerPrice(raw.iskontoluRaw);
+  const netPrice = parseIkizlerPrice(raw.netPriceRaw);
+  const vatRate = parseIkizlerVatRate(raw.kdvRaw);
+
+  // KDV hariç birim fiyat: İskontolu varsa o, yoksa Liste Fiyatı
+  const unitPriceExclVat = iskontolu ?? listPrice;
+
+  // Product name: "İKZ00096 - BADANA FIRÇASI ..." → "BADANA FIRÇASI ..."
+  let productName: string | undefined;
+  if (raw.productLine) {
+    const m = raw.productLine.match(/^[^-]+-\s*(.+)$/);
+    productName = m && m[1] ? m[1].trim() : raw.productLine.trim();
+  }
+
+  return {
+    productName,
+    listPrice,
+    unitPriceExclVat,
+    unitPriceWithVat: netPrice,
+    vatRate,
+    discountText: raw.discountRaw ?? null,
+  };
+}
+
+async function scrapeCatalog(
+  ctx: ScrapeContext,
+  targets: CatalogScrapeTarget[],
+): Promise<CatalogScrapeResult[]> {
+  const results: CatalogScrapeResult[] = [];
+
+  // Dev/test bayrağı — `IKIZLER_CATALOG_LIMIT=5` env ile ilk N ürünü test et.
+  // Production'da set edilmez → tüm targets gezilir.
+  const limitEnv = process.env.IKIZLER_CATALOG_LIMIT;
+  const limit = limitEnv ? parseInt(limitEnv, 10) : 0;
+  const workTargets = limit > 0 ? targets.slice(0, limit) : targets;
+  if (limit > 0) {
+    vlog(ctx, `catalog: IKIZLER_CATALOG_LIMIT=${limit} aktif → ${workTargets.length}/${targets.length} ürün`);
+  }
+
+  for (const target of workTargets) {
+    const code = target.productCode;
+    try {
+      let detailUrl: string | null = null;
+
+      // 1) Cache hit dene
+      if (target.catalogUrl) {
+        const ok = await navigateDirect(ctx, target.catalogUrl);
+        if (ok) {
+          detailUrl = target.catalogUrl;
+          vlog(ctx, `catalog: cache hit ${code} → ${detailUrl}`);
+        } else {
+          vlog(ctx, `catalog: cache miss for ${code}, search'e düşülüyor`);
+        }
+      }
+
+      // 2) Cache miss → search
+      if (!detailUrl) {
+        detailUrl = await searchAndOpenFirst(ctx, code);
+      }
+
+      if (!detailUrl) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "product-not-found",
+          message: "Catalog detay sayfası açılamadı (cache + search ikisi de başarısız)",
+        });
+        continue;
+      }
+
+      // 3) Modal'dan fiyat oku
+      const modal = await openPriceModalAndExtract(ctx, code);
+      if (!modal) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "catalog-parse-failed",
+          message: "Fiyat modal'ı açılamadı veya parse edilemedi",
+        });
+        continue;
+      }
+
+      if (modal.unitPriceExclVat === null) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "catalog-parse-failed",
+          message: `KDV hariç birim fiyat parse edilemedi (raw: listePrice=${modal.listPrice}, iskontolu=null)`,
+        });
+        continue;
+      }
+
+      // KDV oranı: modal'dan oku; yoksa default 0.20 (R-005)
+      let vatRate = modal.vatRate;
+      if (vatRate === null) {
+        vlog(ctx, `catalog: ${code} KDV oranı parse edilemedi, default %20 fallback`);
+        vatRate = 0.20;
+      }
+
+      // KDV dahil birim fiyat: modal'dan (GenelToplam) öncele; yoksa hesapla
+      let unitPriceWithVat = modal.unitPriceWithVat;
+      if (unitPriceWithVat === null) {
+        unitPriceWithVat = Number(
+          (modal.unitPriceExclVat * (1 + vatRate)).toFixed(2),
+        );
+      }
+
+      vlog(
+        ctx,
+        `catalog: ${code} → net=${modal.unitPriceExclVat} kdv=${(vatRate * 100).toFixed(0)}% dahil=${unitPriceWithVat}`,
+      );
+
+      results.push({
+        ok: true,
+        productCode: code,
+        catalogUrl: detailUrl,
+        productName: modal.productName,
+        listPrice: modal.listPrice,
+        discountText: modal.discountText,
+        unitPriceExclVat: modal.unitPriceExclVat,
+        vatRate,
+        unitPriceWithVat,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      results.push({
+        ok: false,
+        productCode: code,
+        mode: "catalog-parse-failed",
+        message,
+      });
+    }
+  }
+
+  return results;
+}
+
 export const ikizlerAdapter: Adapter = {
   slug: "ikizler",
   displayName: "İkizler Hırdavat",
@@ -525,4 +954,5 @@ export const ikizlerAdapter: Adapter = {
   listOrders,
   getOrderDetail,
   getProductPrice,
+  scrapeCatalog,
 };

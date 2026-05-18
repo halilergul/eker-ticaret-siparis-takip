@@ -20,6 +20,8 @@ import { parseTrPrice } from "@/scripts/scrape/price-parse";
 import { ScrapeError } from "../errors";
 import type {
   Adapter,
+  CatalogScrapeResult,
+  CatalogScrapeTarget,
   RawOrderDetail,
   RawOrderItem,
   RawOrderSummary,
@@ -33,6 +35,8 @@ import {
   LOGIN_SELECTORS,
   ORDER_LIST_SELECTORS,
   TIMEOUTS,
+  CATALOG_SEARCH_URL_TEMPLATE,
+  DEFAULT_VAT_RATE,
 } from "./leventsimsek.constants";
 
 import type { Page } from "playwright";
@@ -501,6 +505,10 @@ async function listOrders(
         const codeMatch2 = c0Full.match(/Muhasebe\s*Kodu[\s:]+(\S+)/i);
         const productCode = codeMatch2 && codeMatch2[1] ? codeMatch2[1].trim() : "";
 
+        // Barkod: "Barkod: 212102590" pattern'inden (009: catalog search-key)
+        const barcodeMatch = c0Full.match(/Barkod[\s:]+(\d+)/i);
+        const barcode = barcodeMatch && barcodeMatch[1] ? barcodeMatch[1].trim() : null;
+
         // Ürün adı: "Barkod:" veya "Muhasebe" anahtar kelimelerinden önceki kısım
         let productName = c0Full;
         const splitIdx = c0Full.search(/\s+(?:Barkod|Muhasebe)\s*[:K]/i);
@@ -526,6 +534,7 @@ async function listOrders(
           quantity,
           unitPriceAtOrder: unitPrice,
           catalogUrl: null,
+          barcode,
         });
       }
 
@@ -591,6 +600,293 @@ async function getProductPrice(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// 009 — Catalog scrape
+// ---------------------------------------------------------------------------
+
+/**
+ * "14.933,38 ₺" → 14933.38 ; "150,00 ₺" → 150.0
+ * Turkish locale: nokta=thousands sep, virgül=decimal.
+ */
+function parseLeventsimsekPrice(raw: string | undefined | null): number | null {
+  if (!raw) return null;
+  // Sadece rakam, nokta, virgül bırak
+  const cleaned = raw.replace(/[^\d.,]/g, "").trim();
+  if (!cleaned) return null;
+  // Turkish: nokta = thousands sep → kaldır; virgül = decimal → noktaya çevir
+  const normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Direct navigate (cache hit) — başarılı mı? */
+async function navigateDirect(ctx: ScrapeContext, url: string): Promise<boolean> {
+  try {
+    const resp = await ctx.page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: TIMEOUTS.NAVIGATION_MS,
+    });
+    return resp !== null && resp.status() < 400;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cache miss: search endpoint'i (?p=search&search=<code>) GET ile aç.
+ * Search 1 sonuç döndürürse direkt detay sayfası açılır (URL = /<slug>-_<ID>.html).
+ * N sonuç döndürürse listing sayfasında muhasebe kodu (DB code) exact match
+ * eden ürünü ara; bulunmazsa ilk sonucu seç.
+ */
+async function searchAndOpenFirst(
+  ctx: ScrapeContext,
+  code: string,
+): Promise<string | null> {
+  const { page } = ctx;
+  const searchUrl = `${CATALOG_SEARCH_URL_TEMPLATE}${encodeURIComponent(code)}`;
+
+  try {
+    await page.goto(searchUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: TIMEOUTS.NAVIGATION_MS,
+    });
+    await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+  } catch {
+    return null;
+  }
+
+  const currentUrl = page.url();
+
+  // Direct redirect to detail page (search 1 sonuç döndürdü)
+  if (/_\d+\.html/.test(currentUrl)) {
+    vlog(ctx, `catalog: ${code} search → direct detail ${currentUrl}`);
+    return currentUrl;
+  }
+
+  // N sonuç → listing page. Card içeriklerini tara, muhasebe kodu match olanı bul.
+  const matchedHref = await page.evaluate((codeArg: string) => {
+    const codeUpper = codeArg.trim().toUpperCase();
+    const cards = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('a[href*="_"][href*=".html"]'),
+    );
+
+    // Önce: card içinde "Muhasebe Kodu" veya code exact match arıyoruz
+    for (const card of cards) {
+      const text = (card.textContent ?? "").toUpperCase();
+      // Tam bir token olarak code'u içeriyor mu?
+      const re = new RegExp(`\\b${codeUpper.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      if (re.test(text)) {
+        return card.getAttribute("href");
+      }
+    }
+
+    // Fallback: ilk href
+    return cards[0]?.getAttribute("href") ?? null;
+  }, code);
+
+  if (!matchedHref) {
+    vlog(ctx, `catalog: ${code} search 0 sonuç (listing boş)`);
+    return null;
+  }
+
+  const fullUrl = matchedHref.startsWith("http")
+    ? matchedHref
+    : `${SITE_BASE_URL}${matchedHref.startsWith("/") ? "" : "/"}${matchedHref}`;
+
+  try {
+    await page.goto(fullUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: TIMEOUTS.NAVIGATION_MS,
+    });
+    return fullUrl;
+  } catch {
+    return null;
+  }
+}
+
+type DetailParseResult = {
+  productName: string | undefined;
+  listPrice: number | null;
+  unitPriceExclVat: number | null; // Nakit Fiyatı
+};
+
+/**
+ * Detail page'de `.dFyt` row'larını tara: `.listtext` label + sibling span `#pric` value.
+ * Nakit Fiyatı (KDV hariç bayi alma) canonical takip değişkeni.
+ */
+async function extractDetailPrices(
+  ctx: ScrapeContext,
+  code: string,
+): Promise<DetailParseResult | null> {
+  const { page } = ctx;
+
+  // Fiyat satırları JS-injected; bekle
+  await page
+    .waitForSelector(".dFyt .listtext", { timeout: 8_000 })
+    .catch(() => undefined);
+
+  const raw = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>(".dFyt"));
+    const out: {
+      nakitRaw?: string;
+      listRaw?: string;
+      productName?: string;
+    } = {};
+
+    // Ürün adı — h1 veya .product-title benzeri
+    const heading = document.querySelector<HTMLElement>("h1");
+    if (heading) {
+      out.productName = heading.textContent?.trim();
+    }
+
+    for (const row of rows) {
+      const labelEl = row.querySelector<HTMLElement>(".listtext");
+      const label = labelEl?.textContent?.trim() ?? "";
+      // Value span: tipik olarak .listtext'in sonraki sibling'i veya .dFyt'nin son #pric'i
+      const priceSpan = row.querySelector<HTMLElement>("#pric");
+      const priceText = priceSpan?.textContent?.trim() ?? "";
+
+      if (!priceText) continue;
+
+      if (/^Nakit\s*Fiyat[ıi]?/i.test(label)) {
+        out.nakitRaw = priceText;
+      } else if (/^Liste\s*Fiyat[ıi]?/i.test(label)) {
+        out.listRaw = priceText;
+      }
+    }
+
+    return out;
+  });
+
+  if (!raw) {
+    return null;
+  }
+
+  // Debug: hiçbir fiyat bulunamadıysa HTML dump
+  if (!raw.nakitRaw) {
+    try {
+      const html = await page.content();
+      const safe = code.replace(/[^a-zA-Z0-9-]/g, "_");
+      await fs.writeFile(
+        path.join(ctx.debugDir, `catalog-no-price-${safe}.html`),
+        html,
+        "utf-8",
+      );
+      vlog(ctx, `catalog: ${code} Nakit Fiyatı bulunamadı → HTML dump`);
+    } catch {
+      /* tolere */
+    }
+  }
+
+  return {
+    productName: raw.productName,
+    listPrice: parseLeventsimsekPrice(raw.listRaw),
+    unitPriceExclVat: parseLeventsimsekPrice(raw.nakitRaw),
+  };
+}
+
+async function scrapeCatalog(
+  ctx: ScrapeContext,
+  targets: CatalogScrapeTarget[],
+): Promise<CatalogScrapeResult[]> {
+  const results: CatalogScrapeResult[] = [];
+
+  // Dev/test bayrağı — `LEVENTSIMSEK_CATALOG_LIMIT=5` env ile ilk N ürünü test et.
+  const limitEnv = process.env.LEVENTSIMSEK_CATALOG_LIMIT;
+  const limit = limitEnv ? parseInt(limitEnv, 10) : 0;
+  const workTargets = limit > 0 ? targets.slice(0, limit) : targets;
+  if (limit > 0) {
+    vlog(
+      ctx,
+      `catalog: LEVENTSIMSEK_CATALOG_LIMIT=${limit} aktif → ${workTargets.length}/${targets.length} ürün`,
+    );
+  }
+
+  for (const target of workTargets) {
+    const code = target.productCode;
+    try {
+      let detailUrl: string | null = null;
+
+      // 1) Cache hit dene
+      if (target.catalogUrl) {
+        const ok = await navigateDirect(ctx, target.catalogUrl);
+        if (ok) {
+          detailUrl = target.catalogUrl;
+          vlog(ctx, `catalog: cache hit ${code} → ${detailUrl}`);
+        } else {
+          vlog(ctx, `catalog: cache miss for ${code}, search'e düşülüyor`);
+        }
+      }
+
+      // 2) Cache miss → search (barkod öncelikli — site search unique sonuç döndürür)
+      if (!detailUrl) {
+        if (target.barcode) {
+          vlog(ctx, `catalog: ${code} barkod ile aranıyor (${target.barcode})`);
+          detailUrl = await searchAndOpenFirst(ctx, target.barcode);
+        }
+      }
+      // 3) Barkod yoksa veya barkod search başarısız → muhasebe kodu fallback
+      if (!detailUrl) {
+        detailUrl = await searchAndOpenFirst(ctx, code);
+      }
+
+      if (!detailUrl) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "product-not-found",
+          message: "Catalog detay sayfası açılamadı (cache + search ikisi de başarısız)",
+        });
+        continue;
+      }
+
+      // 3) Detail page'den fiyat oku
+      const detail = await extractDetailPrices(ctx, code);
+      if (!detail || detail.unitPriceExclVat === null) {
+        results.push({
+          ok: false,
+          productCode: code,
+          mode: "catalog-parse-failed",
+          message: `Nakit Fiyatı parse edilemedi (raw: list=${detail?.listPrice ?? "null"})`,
+        });
+        continue;
+      }
+
+      const vatRate = DEFAULT_VAT_RATE; // "KDV HARİÇ FİYATLARDIR" notu açık
+      const unitPriceWithVat = Number(
+        (detail.unitPriceExclVat * (1 + vatRate)).toFixed(2),
+      );
+
+      vlog(
+        ctx,
+        `catalog: ${code} → nakit=${detail.unitPriceExclVat} kdv=${(vatRate * 100).toFixed(0)}% dahil=${unitPriceWithVat}`,
+      );
+
+      results.push({
+        ok: true,
+        productCode: code,
+        catalogUrl: detailUrl,
+        productName: detail.productName,
+        listPrice: detail.listPrice,
+        discountText: null, // Levent sitesi explicit iskonto satırı vermiyor
+        unitPriceExclVat: detail.unitPriceExclVat,
+        vatRate,
+        unitPriceWithVat,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      results.push({
+        ok: false,
+        productCode: code,
+        mode: "catalog-parse-failed",
+        message,
+      });
+    }
+  }
+
+  return results;
+}
+
 export const leventsimsekAdapter: Adapter = {
   slug: "leventsimsek",
   displayName: "Levent Şimşek Armatür",
@@ -598,4 +894,5 @@ export const leventsimsekAdapter: Adapter = {
   listOrders,
   getOrderDetail,
   getProductPrice,
+  scrapeCatalog,
 };

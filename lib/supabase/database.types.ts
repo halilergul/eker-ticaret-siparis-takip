@@ -120,6 +120,7 @@ export type Database = {
       }
       products: {
         Row: {
+          barcode: string | null
           brand: string | null
           catalog_url: string | null
           code: string
@@ -134,6 +135,7 @@ export type Database = {
           vat_rate: number
         }
         Insert: {
+          barcode?: string | null
           brand?: string | null
           catalog_url?: string | null
           code: string
@@ -148,6 +150,7 @@ export type Database = {
           vat_rate?: number
         }
         Update: {
+          barcode?: string | null
           brand?: string | null
           catalog_url?: string | null
           code?: string

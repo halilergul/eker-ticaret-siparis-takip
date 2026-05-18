@@ -97,3 +97,59 @@ export const TIMEOUTS = {
   NAVIGATION_MS: 20_000,
   GLOBAL_MS: 60_000,
 } as const;
+
+// -----------------------------------------------------------------------------
+// 009 — Catalog scrape (zamlanan ürünler genişlemesi)
+// -----------------------------------------------------------------------------
+//
+// Keşif (2026-05-17, T007-T011): İkizler ürün fiyatı modal-tabanlı.
+//   - Tüm ürünler listing: /Home/AramaSonuc?OzelFiltre=TumUrunler&KategoriAgacID=0
+//   - Search POST: /Home/AramaSonuc  body: KategoriAgacID=0&SearchText=<code>
+//   - Detay sayfası: /Home/UrunDetay?ID=<numeric>  (ID-based, kod→ID deterministik değil)
+//   - Detay sayfasında `<a class="fiyatgoster" hoverattr="<ID>" data-bs-target="#productModalId">`
+//     butonu var. Tıklanınca JS modal'ı (#productModalId) Liste/İskontolu/Net fiyat satırlarıyla
+//     dolduruyor. Veri sayfa scope'unda gömülü (XHR yok).
+//
+// Modal row yapıları (Bootstrap col-* grid):
+//   - "Ürün : <kod> - <ad>"                       (col-6 + col-6)
+//   - "İskonto : %X+%Y"                           (col-6 + col-6, sadece iskonto varsa)
+//   - "Liste Fiyatı : 95.000 TL"                  (col-6 + col-6)
+//   - "İskontolu Fiyat : <fiyat> TL"              (col-6 + col-6, sadece iskonto varsa)
+//   - "İskonto Tutarı : <fiyat>"                  (col-6 + col-6, sadece iskonto varsa)
+//   - "KDV Tutarı : <fiyat>"                      (col-6 + col-6, sadece KDV > 0)
+//   - "Net Fiyatı : <NET> KDV(<oran>) <birim>"    (col-6 + col-2 + col-2 + col-2)
+//
+// Sayı formatı: JavaScript `.toFixed(decimalCount)` çıktısı — nokta=decimal, thousands sep YOK.
+//   "95.000 TL" → 95.0 ; "1234.560 TL" → 1234.56
+//
+// Canonical fiyat eşlemesi:
+//   - unitPriceExclVat = İskontolu Fiyat (varsa) yoksa Liste Fiyatı
+//   - vatRate = KDV(N) parantezinden N → N/100
+//   - unitPriceWithVat = Net Fiyatı (modal'da hesaplanmış); fallback = exclVat × (1 + vatRate)
+//   - listPrice = Liste Fiyatı
+//   - discountText = İskonto satırı (varsa)
+
+export const CATALOG_LISTING_URL = `${SITE_BASE_URL}/Home/AramaSonuc?OzelFiltre=TumUrunler&KategoriAgacID=0`;
+
+export const CATALOG_SEARCH_INPUT_SELECTOR = 'input[name="SearchText"]';
+
+// Search result sayfasında ilk ürün detay linki
+export const CATALOG_FIRST_RESULT_SELECTORS = [
+  'a[href*="/Home/UrunDetay"]',
+] as const;
+
+// Detail page price modal trigger + container
+export const CATALOG_PRICE_MODAL = {
+  TRIGGER: 'a.fiyatgoster, .fiyatgoster',
+  CONTAINER: '#productModalId',
+  CLOSE: '#productModalId [data-bs-dismiss="modal"]',
+} as const;
+
+// Modal içindeki row'ların label text'leri (parse rehberi)
+export const CATALOG_MODAL_LABELS = {
+  PRODUCT: /^\s*Ürün\s*:/i,
+  ISKONTO: /^\s*İskonto\s*:(?!.*Tutar)(?!.*Fiyat)/i, // "İskonto :" — ama "İskonto Tutarı" veya "İskontolu Fiyat" değil
+  LIST_PRICE: /^\s*Liste\s*Fiyat[ıi]?\s*:/i,
+  ISKONTOLU: /^\s*İskontolu\s*Fiyat\s*:/i,
+  NET_PRICE: /^\s*Net\s*Fiyat[ıi]?\s*:/i,
+} as const;

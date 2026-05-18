@@ -130,7 +130,7 @@ async function selectCatalogTargets(
 
   const productsRes = await supabase
     .from("products")
-    .select("code, last_seen_at, catalog_url")
+    .select("code, last_seen_at, catalog_url, barcode, name")
     .eq("supplier_id", supplierId);
   if (productsRes.error) {
     throw new ScrapeError({
@@ -159,10 +159,15 @@ async function selectCatalogTargets(
     new Set([...productRows.map((r) => r.code), ...orderCodes]),
   );
 
-  let targets: CatalogScrapeTarget[] = allCodes.map((code) => ({
-    productCode: code,
-    catalogUrl: productMap.get(code)?.catalog_url ?? null,
-  }));
+  let targets: CatalogScrapeTarget[] = allCodes.map((code) => {
+    const row = productMap.get(code);
+    return {
+      productCode: code,
+      catalogUrl: row?.catalog_url ?? null,
+      barcode: row?.barcode ?? null,
+      productName: row?.name ?? null,
+    };
+  });
 
   if (args.onlyStaleHours !== undefined) {
     const thresholdMs = args.onlyStaleHours * 60 * 60 * 1000;
@@ -267,7 +272,7 @@ async function catalogPhase(
         currentUnitPrice: r.unitPriceWithVat,
         catalogUrl: r.catalogUrl,
       });
-      await writePriceSnapshot({
+      const snapResult = await writePriceSnapshot({
         productId: ensured.productId,
         unitPriceWithVat: r.unitPriceWithVat,
         unitPriceExclVat: r.unitPriceExclVat,
@@ -276,11 +281,16 @@ async function catalogPhase(
         vatRate: r.vatRate,
         source: "catalog",
       });
-      summary.snapshots_added++;
       summary.products_observed++;
+      if (snapResult.inserted) {
+        summary.snapshots_added++;
+      } else {
+        summary.snapshots_skipped = (summary.snapshots_skipped ?? 0) + 1;
+      }
       const niceName = r.productName ? ` ${r.productName}` : "";
+      const status = snapResult.inserted ? "yeni" : "mevcut";
       console.log(
-        `[scrape:all] ✓ ${r.productCode}${niceName} → ${r.unitPriceWithVat.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺ (+${ensured.backfilledOrderItems} link)`,
+        `[scrape:all] ✓ ${r.productCode}${niceName} → ${r.unitPriceWithVat.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺ (${status}, +${ensured.backfilledOrderItems} link)`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -289,8 +299,9 @@ async function catalogPhase(
     }
   }
 
+  const skipped = summary.snapshots_skipped ?? 0;
   console.log(
-    `[scrape:all] Catalog aşaması: ${summary.snapshots_added} yeni snapshot, ${summary.errors.length} hata`,
+    `[scrape:all] Catalog aşaması: ${summary.snapshots_added} yeni snapshot, ${skipped} mevcut atlandı, ${summary.errors.length} hata`,
   );
 }
 
