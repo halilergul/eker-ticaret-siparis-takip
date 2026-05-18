@@ -20,6 +20,16 @@ export async function dispatchScrapeWorkflow(
   const ref = process.env.GITHUB_REF_BRANCH ?? "master";
 
   if (!owner || !repo || !pat) {
+    const missing = [
+      !owner && "GITHUB_OWNER",
+      !repo && "GITHUB_REPO",
+      !pat && "GITHUB_PAT",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    console.error(
+      `[workflow-dispatch] missing env: ${missing} — supplier=${input.supplierSlug}`,
+    );
     return { ok: false, status: 0, bodyHash: "missing-env" };
   }
 

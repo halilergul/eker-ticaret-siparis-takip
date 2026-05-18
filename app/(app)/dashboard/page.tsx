@@ -7,6 +7,9 @@ import {
 import { parseFilter } from "@/lib/validations/order-filter";
 import { FilterBar } from "@/components/features/orders/filter-bar";
 import { OrderTable } from "@/components/features/orders/order-table";
+import { SupplierTriggerCard } from "@/components/features/scrape/supplier-trigger-card";
+import { listSchedules } from "@/lib/queries/scrape-schedule";
+import { getLatestRunBySupplier } from "@/lib/queries/scrape-runs";
 
 export const metadata: Metadata = {
   title: "Dashboard — Eker Ticaret",
@@ -20,11 +23,23 @@ type Props = {
 
 export default async function DashboardPage({ searchParams }: Props) {
   const filter = parseFilter(await searchParams);
-  const [orders, suppliers, statuses] = await Promise.all([
+  const [orders, suppliers, statuses, schedules] = await Promise.all([
     listOrders(filter),
     listSuppliers(),
     listDistinctStatuses(),
+    listSchedules(),
   ]);
+
+  const triggerCards = await Promise.all(
+    schedules.map(async (s) => ({
+      supplier: {
+        id: s.supplierId,
+        slug: s.supplierSlug,
+        name: s.supplierName,
+      },
+      lastRun: await getLatestRunBySupplier(s.supplierId),
+    })),
+  );
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -42,7 +57,19 @@ export default async function DashboardPage({ searchParams }: Props) {
         </span>
       </header>
 
-      <section className="mt-6">
+      {triggerCards.length > 0 ? (
+        <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {triggerCards.map((card) => (
+            <SupplierTriggerCard
+              key={card.supplier.id}
+              supplier={card.supplier}
+              lastRun={card.lastRun}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      <section className="mt-8">
         <FilterBar
           suppliers={suppliers}
           statuses={statuses}

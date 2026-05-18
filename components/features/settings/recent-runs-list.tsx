@@ -34,7 +34,7 @@ export async function RecentRunsList({ supplierId }: Props) {
   if (runs.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-stone-300 bg-stone-50 p-4 text-sm text-stone-600">
-        Henüz scrape yapılmadı — başlatmak için &quot;Şimdi tetikle&quot;ye basın.
+        Henüz scrape yapılmadı — başlatmak için &quot;Kontrol et&quot;e basın.
       </div>
     );
   }

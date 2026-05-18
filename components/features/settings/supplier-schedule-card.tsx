@@ -1,11 +1,12 @@
 import { RecentRunsList } from "@/components/features/settings/recent-runs-list";
 import { ScheduleForm } from "@/components/features/settings/schedule-form";
-import { TriggerNowButton } from "@/components/features/settings/trigger-now-button";
+import { TriggerButton } from "@/components/features/scrape/trigger-button";
 import { formatTrDateTime } from "@/lib/format/date";
 import {
   calculateNextRunAt,
   type ScheduleRow,
 } from "@/lib/queries/scrape-schedule";
+import { getLatestRunBySupplier } from "@/lib/queries/scrape-runs";
 
 type Props = {
   schedule: ScheduleRow;
@@ -31,11 +32,12 @@ function formatNextRun(date: Date | null): string {
   return `Sonraki otomatik scrape: ${formatter.format(date)} (Türkiye saati)`;
 }
 
-export function SupplierScheduleCard({ schedule }: Props) {
+export async function SupplierScheduleCard({ schedule }: Props) {
   const nextRun = calculateNextRunAt(
     schedule.enabled,
     schedule.dailyHourUtc,
   );
+  const lastRun = await getLatestRunBySupplier(schedule.supplierId);
 
   return (
     <article className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
@@ -48,7 +50,24 @@ export function SupplierScheduleCard({ schedule }: Props) {
             {schedule.supplierSlug}
           </p>
         </div>
-        <TriggerNowButton supplierSlug={schedule.supplierSlug} />
+        <TriggerButton
+          supplierSlug={schedule.supplierSlug}
+          initialLastRun={
+            lastRun
+              ? {
+                  runId: lastRun.id,
+                  status: lastRun.status,
+                  triggerType: lastRun.triggerType,
+                  startedAt: lastRun.startedAt,
+                  finishedAt: lastRun.finishedAt,
+                  ordersInserted: lastRun.ordersInserted,
+                  itemsInserted: lastRun.itemsInserted,
+                  snapshotsAdded: lastRun.snapshotsAdded,
+                  errorsCount: lastRun.errorsCount,
+                }
+              : null
+          }
+        />
       </div>
 
       {schedule.lastAutoRunAt ? (

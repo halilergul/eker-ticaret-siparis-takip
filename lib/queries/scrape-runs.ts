@@ -86,6 +86,13 @@ export async function listRecentRuns(
   });
 }
 
+export async function getLatestRunBySupplier(
+  supplierId: string,
+): Promise<ScrapeRunRow | null> {
+  const runs = await listRecentRuns(supplierId, 1);
+  return runs[0] ?? null;
+}
+
 const SECRET_REGEX = /\b(password|token|bearer|api[-_]?key|secret|username)[^\s,;]*/gi;
 
 function redactSecrets(text: string): string {
