@@ -695,8 +695,11 @@ async function navigateDirect(
 ): Promise<boolean> {
   vlog(ctx, `catalog: direct nav → ${url}`);
   try {
+    // domcontentloaded yeterli: aşağıdaki FIELD_INDICATORS waitFor (20s) zaten
+    // SPA render'ını doğruluyor. networkidle Vue/Nuxt'ta arka plan istekleri
+    // yüzünden ürün başına 5-10sn fazladan bekletiyordu.
     const response = await ctx.page.goto(url, {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
       timeout: 25000,
     });
     if (!response || response.status() === 404) {
@@ -909,14 +912,16 @@ async function scrapeCatalog(
       const vatRaw = await readCell(FIELD_CSS.vat);
       const discountRaw = await readCell(FIELD_CSS.discount);
 
-      // Marka — sayfada banner ya da link içinde olabilir; SEGNAN.jpg alt text dump'ta görünüyor
+      // Marka — sayfada banner ya da link içinde olabilir; SEGNAN.jpg alt text dump'ta görünüyor.
+      // Bazı ürün sayfalarında bu selector hiç yok → 30sn default timeout'a düşmesin diye
+      // 1sn'lik tight budget. Marka kritik değil, null bile döndürülebilir.
       const brandRaw = await ctx.page
         .locator(`[alt][title]`)
         .filter({
           hasNot: ctx.page.locator(`img[alt*="logo" i]`),
         })
         .first()
-        .getAttribute("title")
+        .getAttribute("title", { timeout: 1000 })
         .catch(() => null);
 
       vlog(
