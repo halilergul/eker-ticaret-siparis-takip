@@ -47,6 +47,16 @@ const GLOBAL_TIMEOUT_MS = Number(process.env.TIMEOUT_OVERRIDE_MS) || 8 * 60 * 10
 
 type TriggerType = "auto" | "manual" | "unknown";
 
+type ActiveRun = {
+  runId: string;
+  summary: ScrapeSummary;
+  triggerType: TriggerType;
+  supplierId: string;
+};
+
+// Outer timeout handler bu referansa bakar; runAll finalize edince null'a çekilir.
+let activeRun: ActiveRun | null = null;
+
 type Args = {
   supplier?: string;
   headed: boolean;
@@ -326,6 +336,7 @@ async function runAll(args: Args): Promise<void> {
   const supplierId = await getSupplierIdBySlug(args.supplier);
   const runId = await startRun(supplierId, args.triggerType);
   const summary: ScrapeSummary = emptySummary();
+  activeRun = { runId, summary, triggerType: args.triggerType, supplierId };
   const debugDir = path.join("scrape-debug", runId);
 
   let browser: Browser | null = null;
@@ -386,6 +397,7 @@ async function runAll(args: Args): Promise<void> {
       if (args.triggerType === "auto") {
         await updateScheduleCache(supplierId, "partial").catch(() => undefined);
       }
+      activeRun = null;
       process.exit(0);
     } else if (hasErrors) {
       console.log(`[scrape:all] ❌ Başarısız (${summary.errors.length} hata) — ${timeStr}`);
@@ -393,6 +405,7 @@ async function runAll(args: Args): Promise<void> {
       if (args.triggerType === "auto") {
         await updateScheduleCache(supplierId, "failed").catch(() => undefined);
       }
+      activeRun = null;
       process.exit(1);
     } else {
       console.log(`[scrape:all] ✅ Başarılı (${timeStr})`);
@@ -400,6 +413,7 @@ async function runAll(args: Args): Promise<void> {
       if (args.triggerType === "auto") {
         await updateScheduleCache(supplierId, "success").catch(() => undefined);
       }
+      activeRun = null;
       process.exit(0);
     }
   } catch (err) {
@@ -418,6 +432,7 @@ async function runAll(args: Args): Promise<void> {
     if (args.triggerType === "auto") {
       await updateScheduleCache(supplierId, "failed").catch(() => undefined);
     }
+    activeRun = null;
     if (
       scrapeError.mode === "login-failed" ||
       scrapeError.mode === "2fa-required" ||
@@ -464,6 +479,19 @@ async function main(): Promise<void> {
   } catch (err) {
     if (err instanceof ScrapeError && err.mode === "timeout") {
       console.error("[scrape:all] ❌ Global outer timeout aşıldı — aborted");
+      if (activeRun) {
+        await abortRun(
+          activeRun.runId,
+          activeRun.summary,
+          "Global outer timeout aşıldı (main race)",
+        ).catch(() => undefined);
+        if (activeRun.triggerType === "auto") {
+          await updateScheduleCache(activeRun.supplierId, "aborted").catch(
+            () => undefined,
+          );
+        }
+        activeRun = null;
+      }
       process.exit(4);
     }
     if (err instanceof ScrapeError) {
@@ -475,8 +503,5 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 }
-
-// Silence unused import warnings for cases the orchestrator doesn't directly use
-void abortRun;
 
 main();
