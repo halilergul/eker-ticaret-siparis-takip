@@ -187,3 +187,28 @@ Her yeni talep veya kapsam değişikliği buraya kaydedilir.
 - **Doğrulama**: `npx tsc --noEmit` clean ✅; DB seed migrations idempotent verified (3 supplier rows, 3 schedule rows); workflow YAML reformatted correctly; credential leak scan 0 hardcoded finding.
 - **Durum**: Code scaffolding tamam. Kullanıcının yerel ortamda credentials ekleyip `--headed` smoke testleri yapması + selector refine etmesi + GitHub Secrets ekleyip production smoke alması bekleniyor.
 
+
+### CR-009 — Feature 009-multi-supplier-catalog tamamlandı
+- **Tarih:** 2026-05-18
+- **Talep eden:** Halil (kendi notu)
+- **Açıklama:** İkizler + Levent Şimşek için catalog scrape — `/dashboard/price-changes` artık 3 tedarikçinin de fiyat değişimlerini göstermesi için ürün catalog detay sayfalarından KDV hariç özel fiyat snapshot'ları çekiyor. 008'de bu faz ertelenmişti. Spec: [specs/009-multi-supplier-catalog/spec.md](../specs/009-multi-supplier-catalog/spec.md).
+- **Etkilenen dosyalar:**
+  - **Yeni:** Migration `add_products_barcode` (products.barcode kolonu + index)
+  - **Değiştirilen:**
+    - `lib/scraper/adapters/ikizler.constants.ts` — CATALOG_* selector'lar (modal trigger + price modal labels)
+    - `lib/scraper/adapters/ikizler.ts` — `scrapeCatalog` (modal-based: `.fiyatgoster` click → modal → "Liste Fiyatı:" / "Nakit Fiyatı:" parse) + `searchAndOpenFirst` (POST form submit, SearchText input)
+    - `lib/scraper/adapters/leventsimsek.constants.ts` — CATALOG_* selector'lar (`.dFyt .listtext` + `.divsinglepriceUPSNAKIT #pric`)
+    - `lib/scraper/adapters/leventsimsek.ts` — `scrapeCatalog` (search + detail page parse) + barkod-aware search (Levent muhasebe kodu site search'te unique değil); `getOrderDetail` modal'dan `Barkod:` regex parse + `RawOrderItem.barcode`
+    - `lib/scraper/supabase-writer.ts` — `writePriceSnapshot` idempotency check (aynı fiyat → no-op) + `numeric(14,2)` yuvarlama normalize; `ensureProduct` barcode parametresi + products.barcode UPDATE
+    - `lib/scraper/types.ts` — `CatalogScrapeTarget.barcode/productName`, `RawOrderItem.barcode`, `ScrapeSummary.snapshots_skipped`
+    - `scripts/scrape/all.ts` — `catalogPhase` snapshots_skipped log + summary; `selectCatalogTargets` products.barcode + name dahil
+    - `scripts/scrape/check-schedule.ts` — exit 78 → `GITHUB_OUTPUT.skip` (saatlik mail spam fix)
+    - `.github/workflows/scrape.yml` — `steps.check.outputs.skip == 'false'` gate
+    - `lib/supabase/database.types.ts` — products.barcode tip eklendi
+- **Önemli kararlar:**
+  - **Levent KDV hariç Nakit Fiyatı canonical** — site "KDV HARİÇ FİYATLARDIR" notuyla net, adapter %20 KDV ekleyerek `unitPriceWithVat` hesaplar
+  - **İkizler Nakit = Net Fiyatı (modal'da)** — KDV=0 görünüyor (B2B muafiyet); fiyat zaten KDV dahil/hariç aynı
+  - **Levent search çakışması → barkod fallback** — orders modal'dan barkod yakalanır, catalog scrape barkod öncelikli arama yapar
+  - **Idempotency**: writer `unit_price` exact match → skip; numeric(14,2) yuvarlama normalize
+- **Etki analizi:** ~5-6 saat (spec + plan + tasks + impl + 2 adapter discovery + idempotency fix + barcode refactor). Branch `009-multi-supplier-catalog`. 1 migration eklendi (geri dönüş: kolon nullable, eski kodla uyumlu). Local smoke: İkizler 60/60 ürün, Levent 6/6 ürün, ikinci koşumda 0 yeni snapshot.
+- **Durum:** Tamamlandı (local). Production smoke + manuel fiyat doğrulama push sonrası.

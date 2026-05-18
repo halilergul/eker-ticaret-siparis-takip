@@ -57,6 +57,9 @@ test-results/
 # Scraper debug artifacts (screenshot'lar, gitignored)
 scrape-debug/
 
+# Geçici keşif script'leri (009 catalog scrape DOM discovery — gitignored, throw-away)
+scripts/scrape-diag/
+
 # Logs
 *.log
 npm-debug.log*

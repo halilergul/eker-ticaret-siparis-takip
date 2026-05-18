@@ -189,7 +189,7 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Tarih:** 2026-05-17
 - **Konu:** Environment / dotenv
 - **Detay:** `KEY="value"` formatında çift tırnak dotenv tarafından **silinir** (içerik temiz string olur). Ama `KEY=<"value">` formatında **değer `<` ile başlıyorsa** dotenv "bu tırnaklı string değil" diyor ve `<"value">` ifadesini tüm karakterleriyle string olarak alıyor. Placeholder formatı `<your_username>` gibi olan template'lerden değer kopyalanırken `< >` çıkartılmazsa B2B login "kullanıcı bulunamadı" döner — silent failure (PHP/ASP.NET siteler genelde silent redirect yapar yanlış giriş'te).
-- **Çözüm/Önlem:** `.env.local`'da credentials'ı **tırnak ve angle bracket olmadan** yaz: `IKIZLER_USERNAME=EKERTİCARET` veya `IKIZLER_USERNAME="EKERTİCARET"` ✓; `IKIZLER_USERNAME=<EKERTİCARET>` ✗ değer `<EKERTİCARET>` olur. Sezgi: değerin gerçek uzunluğu beklediğinden fazlaysa muhtemelen sarmalayıcı karakter sızmış. Diagnostic yöntem: bir log satırı atan tanı script'i (`console.log("uzunluk=", username.length)`) credentials'ı log'lamadan format problemi'ni yakalar.
+- **Çözüm/Önlem:** `.env.local`'da credentials'ı **tırnak ve angle bracket olmadan** yaz: `IKIZLER_USERNAME=myvalue` veya `IKIZLER_USERNAME="myvalue"` ✓; `IKIZLER_USERNAME=<myvalue>` ✗ değer `<myvalue>` olur. Sezgi: değerin gerçek uzunluğu beklediğinden fazlaysa muhtemelen sarmalayıcı karakter sızmış. Diagnostic yöntem: bir log satırı atan tanı script'i (`console.log("uzunluk=", username.length)`) credentials'ı log'lamadan format problemi'ni yakalar.
 
 ### Playwright `force: true` görünmez form elementleri için yetersiz — DOM evaluate gerek
 - **Tarih:** 2026-05-17
@@ -208,3 +208,28 @@ Agent'lar bu dosyayı şu durumlarda günceller:
 - **Konu:** Scraping / Modal UI
 - **Detay:** Levent Şimşek sipariş listesi 3 sütun: durum+tarih, ödeme+tutar, "Detaylar"+"İptal" butonları. Site sipariş'lere **kod vermemiş listede** — gerçek kod `LIS29125T2446` sadece "Detaylar" butonuna basıldığında açılan Bootstrap modal'da görünür. listOrders sadece header'ları parse edip detail için ayrı bir `getOrderDetail` çağırması yetmez; modal aç → parse → kapat döngüsü gerekir.
 - **Çözüm/Önlem:** Adapter modülünde **module-level cache** (`const detailCache = new Map<orderNo, items[]>()`). `listOrders` her satır için Detaylar butonuna tıklar (`force: true` çünkü `javascript:void(0)` link), modal açılana kadar bekler (`.modal.show` selector), order code regex'le çıkarır, ürün tablosunu parse eder, cache'e koyar, modal'ı kapatır (Kapat butonu veya ESC), sonraki satıra fresh locator ile geçer. `getOrderDetail` cache'ten okur — DOM nav yok, hızlı. Module-level Map adapter interface'ini değiştirmiyor; tek scrape:all run'ı süresince active. **Idempotency** korunur: yeniden çalıştırırsan cache temizlenir + DB UNIQUE constraint zaten duplicate'leri engeller.
+
+
+### `writePriceSnapshot` 006'dan beri idempotent değil — same-day same-price duplicate satırlar
+- **Tarih:** 2026-05-18
+- **Konu:** Scraping / Idempotency / DB writer
+- **Detay:** `lib/scraper/supabase-writer.ts:writePriceSnapshot` (006'dan kalan) her çağrıldığında **doğrudan INSERT** ediyordu — `record_price_observation` RPC'sinin aksine "aynı fiyat varsa atla" mantığı yok. Sonuç: catalog scrape ardarda 2 kez koşunca her ürün için 2 satır snapshot, fiyat değişmemiş olsa bile. UI'da "yeni snapshot N" sayısı yanıltıcı + DB'de gereksiz satır şişmesi (her gün × her tedarikçi × ürün başına ek satır).
+- **Çözüm/Önlem:** 009'da writer'a idempotency check eklendi: INSERT öncesi son snapshot'ı oku, `unit_price` aynıysa skip + `{ inserted: false }` döner. Orchestrator (`scripts/scrape/all.ts:catalogPhase`) `summary.snapshots_added++` yerine `inserted ? snapshots_added++ : snapshots_skipped++`. Schema `price_snapshots.unit_price` = `numeric(14, 2)` → DB 2 decimal'a yuvarlıyor; karşılaştırma için JS tarafında da `Number(price.toFixed(2))` normalize zorunlu (3-decimal değerler 68.142 → DB'de 68.14 → JS karşılaştırması mismatch yapar).
+
+### Levent Şimşek site search muhasebe kodlarıyla unique sonuç döndürmüyor — barkod fallback şart
+- **Tarih:** 2026-05-18
+- **Konu:** Scraping / Search strategy
+- **Detay:** Levent B2B sitesi (`liste.leventsimsekarmatur.com`) iki kod sistemi kullanıyor: **Muhasebe Kodu** (DB'de `products.code`, kısa, ör. `S001`) ve **Barkod** (uzun numerik, ör. `212102590`). Sipariş modal'ında her ikisi de görünür: `Barkod: 212102590 | Muhasebe Kodu: S001`. Catalog search (`?p=search&search=S001`) substring match yapıyor → "S001" araması 4+ farklı ürün döndürebiliyor (S001, S0010, S0011, ...). İlk sonuç **yanlış ürün** olabilir; örnek: bizim DB'de `S001 = SELEN KAPAKLI TUVALET KAĞITLIĞI`, site search'te S001 → ilk sonuç `1/2 Siber Vana` döndü. Barkod (`?p=search&search=212102590`) ise unique → direkt doğru detay sayfasına redirect.
+- **Çözüm/Önlem:** 009'da kalıcı çözüm: `products.barcode` kolonu eklendi (migration `add_products_barcode`), Levent `getOrderDetail` modal'dan "Barkod: XXX" regex parse eder, `RawOrderItem.barcode` field'ına yazar; `ensureProduct` (supabase-writer) barcode'u `products.barcode`'a UPDATE eder. `selectCatalogTargets` (orchestrator) target'a barcode dahil eder. Levent adapter `scrapeCatalog` **barkod öncelikli** search yapar: `target.barcode ?? target.productCode` sırasıyla dener. Bu pattern başka tedarikçilerde search çakışması olursa reuse edilebilir.
+
+### Levent için detail page fiyat: `.dFyt .listtext "Nakit Fiyatı:" → .divsinglepriceUPSNAKIT #pric`
+- **Tarih:** 2026-05-18
+- **Konu:** Scraping / Site-specific selector
+- **Detay:** Levent detail page'de fiyat 5 satır halinde: Liste Fiyatı, Nakit Fiyatı, Tek Çekim Fiyatı, Kredi Kartı Taksitli Fiyatı, Vadeli Fiyatı. Her satır `<div class="dFyt"><span class="listtext">Nakit Fiyatı:</span><span class="divsinglepriceUPSNAKIT"><span id="pric">82,50</span> ₺</span></div>`. **Canonical takip değişkeni Nakit Fiyatı** (bayi alma fiyatı KDV hariç, "* KDV HARİÇ FİYATLARDIR" notuyla doğrulanmış). `#pric` ID **birden çok yerde** kullanılmış (invalid HTML ama PHP/Joomla siteler tipik) → ID selector tek başına yetersiz, **scope `.dFyt` row + `.listtext` label match şart**. JS-rendered olabileceği için `waitForSelector(".dFyt .listtext", 8s)` ile bekle.
+- **Çözüm/Önlem:** `lib/scraper/adapters/leventsimsek.ts:extractDetailPrices` → DOM evaluate ile `.dFyt` row'ları gez, `.listtext` text'i `/^Nakit\s*Fiyat[ıi]?/i` veya `/^Liste\s*Fiyat[ıi]?/i` regex match et, row scope'unda `#pric` text content al, `parseLeventsimsekPrice` ile TR locale parse (nokta=thousands, virgül=decimal). KDV oranı sayfada görünmüyor → `DEFAULT_VAT_RATE = 0.2` (sayfada "KDV HARİÇ FİYATLARDIR" notu) → `unitPriceWithVat = unitPriceExclVat * 1.20` adapter'da hesaplanır.
+
+### GitHub Actions exit 78 → "neutral skip" deprecated, mail spam yapıyor
+- **Tarih:** 2026-05-18
+- **Konu:** Otomasyon / GitHub Actions
+- **Detay:** GitHub Actions 2020 sonrası exit code 78'i "neutral skip" olarak değil **failure** olarak yorumluyor → saatlik cron hour-mismatch durumunda her saatte 1 Failed workflow run + repo admin'e e-posta. Halil günde 22-23 mail aldı önceki düzeltme öncesi.
+- **Çözüm/Önlem:** `check-schedule.ts` artık her zaman `exit 0` ile çıkıyor; skip/continue kararı `GITHUB_OUTPUT` dosyasına `skip=true|false` yazılarak iletiliyor. Workflow YAML'de sonraki step'ler `if: steps.check.outputs.skip == 'false'` ile gate'lensin. Eski pattern `steps.check.outcome == 'success'` kullanılırsa exit 78'in failure yorumu nedeniyle her saat fail. Detay: 009 hotfix `fix(cron): exit 78 → output gating`.

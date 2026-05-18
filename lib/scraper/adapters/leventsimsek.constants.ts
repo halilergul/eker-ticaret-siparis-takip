@@ -97,3 +97,56 @@ export const TIMEOUTS = {
   NAVIGATION_MS: 20_000,
   GLOBAL_MS: 60_000,
 } as const;
+
+// -----------------------------------------------------------------------------
+// 009 — Catalog scrape (zamlanan ürünler genişlemesi)
+// -----------------------------------------------------------------------------
+//
+// Keşif (2026-05-18, T020-T022):
+//   - Search endpoint (GET): /index.php?p=search&search=<code>
+//     Hidden input `p=search` form'da zorunlu; aksi halde anasayfaya redirect.
+//   - Search input adı: `search` (form GET, action=/index.php)
+//   - Detail URL pattern: /<slug>-_<numericID>.html
+//     Örn: /selen-kapakli-tuvalet-kagitligi-_15393.html
+//     ID-based; kod → ID deterministik üretilemez → search zorunlu.
+//   - Search "S001" gibi muhasebe kodlarıyla çalışıyor ama **substring match**
+//     (S001 araması S001, S0010 vs döndürür) → 4+ sonuç gelirse doğru olanı
+//     filtrelemek gerekir (muhasebe kodu exact match).
+//   - 2 kod sistemi: Muhasebe Kodu (DB'de `code`, kısa, ör. S001) +
+//     Barkod (uzun numerik, ör. 212102590). DB sadece muhasebe kodunu biliyor.
+//
+// Detail page fiyat yapısı:
+//   <div class="dFyt">
+//     <span class="listtext">Nakit Fiyatı:</span>
+//     <span class="divsinglepriceUPSNAKIT"><span id="pric">14.933,38</span> ₺</span>
+//   </div>
+//   ... (Liste Fiyatı, Tek Çekim, Kredi Kartı Taksitli, Vadeli)
+//
+// Canonical takip değişkeni:
+//   Nakit Fiyatı (KDV hariç bayi alma fiyatı; not: "* KDV HARİÇ FİYATLARDIR")
+//   → unitPriceExclVat = Nakit Fiyatı
+//   → vatRate = 0.20 (default; KDV hariç notu açık)
+//   → unitPriceWithVat = Nakit × 1.20
+//   → listPrice = Liste Fiyatı (referans)
+
+export const CATALOG_SEARCH_URL_TEMPLATE = `${SITE_BASE_URL}/index.php?p=search&search=`;
+
+// Detail page üzerindeki fiyat satırları — class-based, multi-language safe
+export const CATALOG_PRICE_SELECTORS = {
+  ROW: ".dFyt",
+  LABEL: ".listtext",
+  // Nakit Fiyatı için spesifik class (en güvenilir):
+  NAKIT_VALUE_CONTAINER: ".divsinglepriceUPSNAKIT",
+  // Liste Fiyatı için id pattern: divdiscount2price<ID> — dynamic ID, regex/contains
+  LIST_VALUE_CONTAINER: '[id^="divdiscount2price"]',
+  // Value span (her container içinde): #pric
+  VALUE_SPAN: "#pric",
+} as const;
+
+// Search result page — ürün card linkleri
+export const CATALOG_SEARCH_RESULT_SELECTORS = [
+  'a[href*="_"][href*=".html"]',
+] as const;
+
+// Default KDV oranı — site "KDV HARİÇ FİYATLARDIR" notuyla net biçimde belirtiyor.
+export const DEFAULT_VAT_RATE = 0.2;

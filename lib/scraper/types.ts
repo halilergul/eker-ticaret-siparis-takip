@@ -28,6 +28,11 @@ export type RawOrderItem = {
   /** Sipariş detay sayfasında ürün adı/görseli linkliyse buradan yakalanır.
    *  Sonraki catalog scrape direkt navigate eder, search'e gerek kalmaz. */
   catalogUrl?: string | null;
+  /** Tedarikçi tarafındaki barkod numarası (Levent Şimşek modal'da gözüküyor:
+   *  "Barkod: 212102590 | Muhasebe Kodu: S001"). Catalog scrape'te site search
+   *  muhasebe koduyla unique sonuç döndürmeyebilir → barkod fallback olarak
+   *  kullanılır. Adapter parse edebilirse doldurur; yoksa null. */
+  barcode?: string | null;
 };
 
 export type RawOrderDetail = {
@@ -39,6 +44,11 @@ export type CatalogScrapeTarget = {
   productCode: string;
   /** Eğer DB'de cache'lenmiş URL varsa direkt navigate edilir; yoksa search kullanılır. */
   catalogUrl?: string | null;
+  /** Barkod (Levent Şimşek için): site search'inde unique sonuç döndürür; muhasebe
+   *  kodu çakışma yaratırsa adapter barkod ile aramaya düşer. */
+  barcode?: string | null;
+  /** Ürün adı (gelişmiş eşleştirme için; adapter search result filter'da kullanır). */
+  productName?: string | null;
 };
 
 export type CatalogScrapeResult =
@@ -88,6 +98,7 @@ export const scrapeSummarySchema = z.object({
   items_skipped: z.number().int().nonnegative(),
   products_observed: z.number().int().nonnegative(),
   snapshots_added: z.number().int().nonnegative(),
+  snapshots_skipped: z.number().int().nonnegative().optional(),
   errors: z.array(
     z.object({
       step: z.string(),
@@ -109,6 +120,7 @@ export function emptySummary(): ScrapeSummary {
     items_skipped: 0,
     products_observed: 0,
     snapshots_added: 0,
+    snapshots_skipped: 0,
     errors: [],
   };
 }

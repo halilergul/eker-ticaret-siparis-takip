@@ -134,6 +134,7 @@ export async function writeOrderItems(
         code: it.productCode,
         productName: it.productName,
         catalogUrl: it.catalogUrl ?? undefined,
+        barcode: it.barcode ?? null,
       });
       itemsWithProductId.push({ item: it, productId: ensured.productId });
     } catch {
@@ -252,6 +253,8 @@ export type EnsureProductParams = {
   vatRate?: number;
   currentUnitPrice?: number;
   catalogUrl?: string;
+  /** Tedarikçi tarafındaki barkod (Levent Şimşek için catalog search-key) */
+  barcode?: string | null;
 };
 
 export type EnsureProductResult = {
@@ -294,6 +297,9 @@ export async function ensureProduct(
     if (params.brand !== undefined) updates.brand = params.brand;
     if (params.vatRate !== undefined) updates.vat_rate = params.vatRate;
     if (params.catalogUrl !== undefined) updates.catalog_url = params.catalogUrl;
+    if (params.barcode !== undefined && params.barcode !== null) {
+      updates.barcode = params.barcode;
+    }
     if (params.currentUnitPrice !== undefined) {
       updates.current_unit_price = params.currentUnitPrice;
       updates.last_seen_at = new Date().toISOString();
@@ -320,6 +326,7 @@ export async function ensureProduct(
         name: params.productName ?? params.code,
         brand: params.brand ?? null,
         catalog_url: params.catalogUrl ?? null,
+        barcode: params.barcode ?? null,
         vat_rate: params.vatRate ?? 0.20,
         current_unit_price: params.currentUnitPrice ?? null,
         last_seen_at: params.currentUnitPrice !== undefined ? new Date().toISOString() : null,
@@ -371,17 +378,56 @@ export type WritePriceSnapshotParams = {
 
 export async function writePriceSnapshot(
   params: WritePriceSnapshotParams,
-): Promise<{ snapshotId: string }> {
+): Promise<{ snapshotId: string | null; inserted: boolean }> {
   const supabase = getServiceClient();
+
+  // Idempotency check (009): aynı ürün için son snapshot'ı oku; aynı unit_price ise insert atla.
+  // `unit_price` = canonical takip değişkeni (catalog için Net Fiyat veya KDV hariç). Aynı
+  // fiyatla yapılan ardışık scrape'ler duplikasyon yaratmasın.
+  //
+  // Schema: price_snapshots.unit_price = numeric(14, 2). Scraper raw değerleri (örn.
+  // 68.142, JS toFixed(3) çıktısı) gönderebilir; DB 2 decimal'a yuvarlar. Karşılaştırma
+  // doğru çalışsın diye scraper değerini de aynı şekilde 2 decimal'a normalize ediyoruz.
+  const normalize2 = (n: number): number => Number(n.toFixed(2));
+  const targetUnitPrice = normalize2(
+    params.unitPriceExclVat ?? params.unitPriceWithVat,
+  );
+  const targetUnitPriceWithVat = normalize2(params.unitPriceWithVat);
+  const targetListPrice = params.listPrice != null ? normalize2(params.listPrice) : null;
+
+  const lastSnapshot = await supabase
+    .from("price_snapshots")
+    .select("unit_price")
+    .eq("product_id", params.productId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastSnapshot.error) {
+    throw new ScrapeError({
+      mode: "db-write-failed",
+      step: "write-price-snapshot-check",
+      details: lastSnapshot.error.message,
+    });
+  }
+
+  if (
+    lastSnapshot.data !== null &&
+    lastSnapshot.data.unit_price !== null &&
+    Number(lastSnapshot.data.unit_price) === targetUnitPrice
+  ) {
+    // Aynı fiyat — snapshot eklenmez (idempotent)
+    return { snapshotId: null, inserted: false };
+  }
 
   const insert = await supabase
     .from("price_snapshots")
     .insert({
       product_id: params.productId,
       captured_at: params.capturedAt ?? new Date().toISOString(),
-      unit_price: params.unitPriceExclVat ?? params.unitPriceWithVat,
-      unit_price_with_vat: params.unitPriceWithVat,
-      list_price: params.listPrice ?? null,
+      unit_price: targetUnitPrice,
+      unit_price_with_vat: targetUnitPriceWithVat,
+      list_price: targetListPrice,
       discount_text: params.discountText ?? null,
       vat_rate: params.vatRate ?? null,
       source: params.source ?? "catalog",
@@ -397,6 +443,6 @@ export async function writePriceSnapshot(
     });
   }
 
-  return { snapshotId: insert.data.id };
+  return { snapshotId: insert.data.id, inserted: true };
 }
 
