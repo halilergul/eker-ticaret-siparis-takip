@@ -1,9 +1,42 @@
 @import "tailwindcss";
 
+/*
+  Eker Ticaret design tokens — pulled from design brief §2 and the
+  Claude Design handoff (test/project/tokens.css). Exposed both as
+  Tailwind 4 @theme variables (so we get `bg-slate-100` etc.) and
+  as utility classes (`et-glass`, `t-display`) for spec-specific styles.
+*/
+
 @theme {
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+    var(--font-outfit), "Outfit", "Inter", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+
+  /* Cool slate page background */
+  --color-bg-top: #eff3f7;
+  --color-bg-bot: #e4e9f0;
+  --color-bg-glow: #f4eedb;
+
+  /* Brand accents */
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+
+  /* Semantic tokens (mirrors Tailwind defaults but tied to design intent) */
+  --color-emerald-100: #d1fae5;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-sky-100: #e0f2fe;
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+  --color-sky-600: #0284c7;
 }
 
 html,
@@ -14,4 +47,195 @@ body {
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+/* ────────────────────────────────────────────────────────
+   Page background — used on top-level dashboard layout
+   ──────────────────────────────────────────────────────── */
+.et-page {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(900px 540px at 92% -4%, rgba(244, 238, 219, 0.55), transparent 60%),
+    linear-gradient(135deg, var(--color-bg-top) 0%, var(--color-bg-bot) 100%);
+}
+
+/* Mobile-shell variant (smaller glow radius) */
+.et-mobile {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(420px 280px at 100% -6%, rgba(244, 238, 219, 0.6), transparent 60%),
+    linear-gradient(160deg, var(--color-bg-top) 0%, var(--color-bg-bot) 100%);
+}
+
+/* ────────────────────────────────────────────────────────
+   Surfaces — glass cards & solid white cards
+   ──────────────────────────────────────────────────────── */
+.et-glass {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.et-glass-strong {
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 16px 40px rgba(15, 23, 42, 0.1);
+}
+
+.et-card-solid {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(15, 23, 42, 0.05);
+}
+
+.et-divider {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* ────────────────────────────────────────────────────────
+   Typography roles — used alongside Tailwind text utilities
+   for spec-driven hero displays.
+   ──────────────────────────────────────────────────────── */
+.t-display {
+  font-size: 56px;
+  line-height: 60px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.t-h1 {
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.t-h2 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 500;
+}
+.t-h3 {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+.t-cap {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ────────────────────────────────────────────────────────
+   Focus ring — slate-900 at 12% opacity
+   ──────────────────────────────────────────────────────── */
+.et-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.12);
+}
+
+/* ────────────────────────────────────────────────────────
+   Animations
+   ──────────────────────────────────────────────────────── */
+@keyframes et-sky-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.35),
+      0 0 0 6px rgba(56, 189, 248, 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.9),
+      0 0 0 6px rgba(56, 189, 248, 0.15);
+  }
+}
+
+@keyframes et-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+@keyframes et-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes et-pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes et-spin {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.et-spin {
+  animation: et-spin 1s linear infinite;
+}
+
+.et-sky-pulse {
+  animation: et-sky-pulse 2s ease-in-out infinite;
+}
+
+.et-skel {
+  background: linear-gradient(
+    90deg,
+    rgba(241, 245, 249, 0.6) 0%,
+    rgba(226, 232, 240, 0.9) 50%,
+    rgba(241, 245, 249, 0.6) 100%
+  );
+  background-size: 400px 100%;
+  animation: et-shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .et-spin,
+  .et-sky-pulse,
+  .et-skel {
+    animation: none;
+  }
 }

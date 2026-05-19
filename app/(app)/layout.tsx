@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
 import { ROUTES } from "@/lib/routes";
-import { TopBar } from "@/components/ui/top-bar";
+import { TopNav } from "@/components/layout/top-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,10 @@ export default async function AppLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <TopBar />
-      <div className="flex-1">{children}</div>
+    <div className="et-page min-h-screen pb-16">
+      <TopNav />
+      {/* Top spacer pushes content past the floating 64px nav + 16px margin */}
+      <div className="pt-28">{children}</div>
     </div>
   );
 }
