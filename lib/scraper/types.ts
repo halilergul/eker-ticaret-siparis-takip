@@ -63,6 +63,9 @@ export type CatalogScrapeResult =
       unitPriceExclVat: number;
       vatRate: number;
       unitPriceWithVat: number;
+      /** Ürün görseli — tedarikçi CDN/uploads üzerinden public hotlink edilebilir
+       *  URL. Faz B'de eklendi; eski adapter koşumları için opsiyonel. */
+      imageUrl?: string | null;
     }
   | {
       ok: false;

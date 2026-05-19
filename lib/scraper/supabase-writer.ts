@@ -255,6 +255,8 @@ export type EnsureProductParams = {
   catalogUrl?: string;
   /** Tedarikçi tarafındaki barkod (Levent Şimşek için catalog search-key) */
   barcode?: string | null;
+  /** Hotlink edilebilir ürün görseli URL'si (Faz B — UI kartlarında gösterilir) */
+  imageUrl?: string | null;
 };
 
 export type EnsureProductResult = {
@@ -300,6 +302,9 @@ export async function ensureProduct(
     if (params.barcode !== undefined && params.barcode !== null) {
       updates.barcode = params.barcode;
     }
+    if (params.imageUrl !== undefined && params.imageUrl !== null) {
+      updates.image_url = params.imageUrl;
+    }
     if (params.currentUnitPrice !== undefined) {
       updates.current_unit_price = params.currentUnitPrice;
       updates.last_seen_at = new Date().toISOString();
@@ -327,7 +332,8 @@ export async function ensureProduct(
         brand: params.brand ?? null,
         catalog_url: params.catalogUrl ?? null,
         barcode: params.barcode ?? null,
-        vat_rate: params.vatRate ?? 0.20,
+        image_url: params.imageUrl ?? null,
+        vat_rate: params.vatRate ?? 0.2,
         current_unit_price: params.currentUnitPrice ?? null,
         last_seen_at: params.currentUnitPrice !== undefined ? new Date().toISOString() : null,
       })

@@ -52,7 +52,7 @@ export function OrderDetailCard({ detail }: Props) {
     productName: it.productName,
     quantity: it.quantity,
     unitPriceAtOrder: it.unitPriceAtOrder,
-    imageUrl: null, // Faz B'de products.image_url join'i ile gelecek
+    imageUrl: it.imageUrl,
   }));
 
   return (

@@ -708,6 +708,7 @@ type DetailParseResult = {
   productName: string | undefined;
   listPrice: number | null;
   unitPriceExclVat: number | null; // Nakit Fiyatı
+  imageUrl: string | null;
 };
 
 /**
@@ -731,12 +732,25 @@ async function extractDetailPrices(
       nakitRaw?: string;
       listRaw?: string;
       productName?: string;
+      imageSrc?: string;
     } = {};
 
     // Ürün adı — h1 veya .product-title benzeri
     const heading = document.querySelector<HTMLElement>("h1");
     if (heading) {
       out.productName = heading.textContent?.trim();
+    }
+
+    // Ürün görseli — Levent detail page'de img.product_imagesplaceholder
+    // büyük versiyondur (images_buyuk/...). Sonuç_0 id'sine de fallback.
+    const imgEl =
+      document.querySelector<HTMLImageElement>("img.product_imagesplaceholder") ??
+      document.querySelector<HTMLImageElement>("#Sonuc_0");
+    if (imgEl) {
+      const src = imgEl.getAttribute("src");
+      if (src && !/^data:/i.test(src) && !/loading\.gif$/i.test(src)) {
+        out.imageSrc = src;
+      }
     }
 
     for (const row of rows) {
@@ -778,10 +792,21 @@ async function extractDetailPrices(
     }
   }
 
+  // Image src — Levent relative path döndürüyor; site origin'ine join et
+  let imageUrl: string | null = null;
+  if (raw.imageSrc) {
+    try {
+      imageUrl = new URL(raw.imageSrc, page.url()).toString();
+    } catch {
+      imageUrl = null;
+    }
+  }
+
   return {
     productName: raw.productName,
     listPrice: parseLeventsimsekPrice(raw.listRaw),
     unitPriceExclVat: parseLeventsimsekPrice(raw.nakitRaw),
+    imageUrl,
   };
 }
 
@@ -872,6 +897,7 @@ async function scrapeCatalog(
         unitPriceExclVat: detail.unitPriceExclVat,
         vatRate,
         unitPriceWithVat,
+        imageUrl: detail.imageUrl,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -128,6 +128,7 @@ export type Database = {
           currency: string
           current_unit_price: number | null
           id: string
+          image_url: string | null
           last_seen_at: string | null
           name: string
           supplier_id: string
@@ -143,6 +144,7 @@ export type Database = {
           currency?: string
           current_unit_price?: number | null
           id?: string
+          image_url?: string | null
           last_seen_at?: string | null
           name: string
           supplier_id: string
@@ -158,6 +160,7 @@ export type Database = {
           currency?: string
           current_unit_price?: number | null
           id?: string
+          image_url?: string | null
           last_seen_at?: string | null
           name?: string
           supplier_id?: string

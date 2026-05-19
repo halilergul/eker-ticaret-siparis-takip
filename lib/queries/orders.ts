@@ -37,6 +37,7 @@ export type OrderDetailItem = {
   quantity: number;
   unitPriceAtOrder: number;
   lineTotal: number;
+  imageUrl: string | null;
 };
 
 export type OrderDetail = {
@@ -78,6 +79,7 @@ type OrderItemRow = {
   product_name: string;
   quantity: number;
   unit_price_at_order: number;
+  product?: { image_url: string | null } | null;
 };
 
 type OrderDetailRow = {
@@ -101,7 +103,8 @@ export async function listOrders(
     .select(
       `id, order_no, status, ordered_at, total_amount, currency,
        supplier:suppliers!inner ( slug, name ),
-       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order )`,
+       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order,
+         product:products ( image_url ) )`,
     )
     .order("ordered_at", { ascending: false });
 
@@ -125,7 +128,8 @@ export async function getOrderDetail(id: string): Promise<OrderDetail | null> {
     .select(
       `id, order_no, status, ordered_at, total_amount, currency, notes,
        supplier:suppliers!inner ( slug, name ),
-       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order )`,
+       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order,
+         product:products ( image_url ) )`,
     )
     .eq("id", id)
     .maybeSingle();
@@ -173,7 +177,7 @@ function toOrderTableRow(r: OrderListRow): OrderTableRow {
       productName: it.product_name,
       quantity: Number(it.quantity),
       unitPriceAtOrder: Number(it.unit_price_at_order),
-      imageUrl: null, // Faz B: products.image_url join'inden gelecek
+      imageUrl: it.product?.image_url ?? null,
     })),
   };
 }
@@ -190,6 +194,7 @@ function toOrderDetail(r: OrderDetailRow): OrderDetail {
       quantity: qty,
       unitPriceAtOrder: unit,
       lineTotal: Number((qty * unit).toFixed(2)),
+      imageUrl: it.product?.image_url ?? null,
     };
   });
   const computedTotal = Number(

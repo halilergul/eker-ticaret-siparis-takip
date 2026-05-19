@@ -924,9 +924,42 @@ async function scrapeCatalog(
         .getAttribute("title", { timeout: 1000 })
         .catch(() => null);
 
+      // Ürün görseli — bayipro CDN (images.bayipro.com) üzerinden public.
+      // SPA olduğu için DOM evaluate ile en uygun adayı seç: src bayipro CDN'inde
+      // olsun, logo/banner içermesin, src "product" veya ürün kodu içersin.
+      const imageUrl: string | null = await ctx.page
+        .evaluate((codeArg) => {
+          const imgs = Array.from(document.querySelectorAll("img"));
+          for (const img of imgs) {
+            const src = img.getAttribute("src") ?? "";
+            const alt = (img.getAttribute("alt") ?? "").toLowerCase();
+            if (!src) continue;
+            // Skip logos, banners, data URIs
+            if (/^data:/i.test(src)) continue;
+            if (/logo/i.test(src) || /banner/i.test(src)) continue;
+            if (alt.includes("logo") || alt.includes("banner")) continue;
+            // Tercih: bayipro CDN ürün görselleri
+            if (/images\.bayipro\.com/.test(src) && /products?/i.test(src)) {
+              return src;
+            }
+          }
+          // 2. tercih: bayipro CDN'de herhangi bir uygun img (Product hariç)
+          for (const img of imgs) {
+            const src = img.getAttribute("src") ?? "";
+            if (!src || /^data:/i.test(src)) continue;
+            if (/logo/i.test(src) || /banner/i.test(src)) continue;
+            if (/images\.bayipro\.com/.test(src)) {
+              const codeNorm = codeArg.toLowerCase().replace(/\s+/g, "");
+              if (src.toLowerCase().includes(codeNorm)) return src;
+            }
+          }
+          return null;
+        }, code)
+        .catch(() => null);
+
       vlog(
         ctx,
-        `catalog: raw netExclVat=${netExclVatRaw ?? "null"}, vat=${vatRaw ?? "null"}, list=${listPriceRaw ?? "null"}, brand=${brandRaw ?? "null"}, discount=${discountRaw ?? "null"}`,
+        `catalog: raw netExclVat=${netExclVatRaw ?? "null"}, vat=${vatRaw ?? "null"}, list=${listPriceRaw ?? "null"}, brand=${brandRaw ?? "null"}, discount=${discountRaw ?? "null"}, image=${imageUrl ?? "null"}`,
       );
 
       const unitPriceExclVat = parsePriceFromLabel(netExclVatRaw);
@@ -969,6 +1002,7 @@ async function scrapeCatalog(
         unitPriceExclVat,
         vatRate,
         unitPriceWithVat,
+        imageUrl,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

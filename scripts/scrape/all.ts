@@ -281,6 +281,7 @@ async function catalogPhase(
         vatRate: r.vatRate,
         currentUnitPrice: r.unitPriceWithVat,
         catalogUrl: r.catalogUrl,
+        imageUrl: r.imageUrl,
       });
       const snapResult = await writePriceSnapshot({
         productId: ensured.productId,
