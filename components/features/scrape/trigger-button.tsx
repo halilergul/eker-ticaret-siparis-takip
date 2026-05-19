@@ -55,13 +55,9 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
     }
 
     let cancelled = false;
-    const interval = setInterval(async () => {
+
+    const fetchAndUpdate = async () => {
       if (cancelled) return;
-      const startedAt = pollStartedAtRef.current ?? Date.now();
-      if (Date.now() - startedAt > POLL_MAX_DURATION_MS) {
-        clearInterval(interval);
-        return;
-      }
       try {
         const res = await fetch(
           `/api/suppliers/${encodeURIComponent(supplierSlug)}/last-run`,
@@ -69,23 +65,17 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
         );
         if (!res.ok) return;
         const next = (await res.json()) as LastRunSnapshot;
-        if (cancelled) return;
-        if (!next) return;
+        if (cancelled || !next) return;
 
         // **Yarış durumu koruması**: polling sadece "newer" run'ı kabul etsin.
-        // Eski (önceki tamamlanmış) run optimistic running state'i ezmesin.
-        // pre-insert pattern + workflow_dispatch async olduğundan, kullanıcı
-        // butona basıp henüz pre-insert prod'a deploy edilmeden polling yarışı
-        // patlatabilir. Bu kontrol: gelen run startedAt mevcut run'dan eski ya da
-        // farklı tamamlanmış run ise yok say.
+        // Optimistic running state'i daha eski (önceki tamamlanmış) bir run
+        // ezmesin — pre-insert pattern + workflow_dispatch async olduğundan
+        // /last-run kısa süreliğine eski success satırı dönebilir.
         const prev = currentRun;
         if (prev) {
           const nextTs = new Date(next.startedAt).getTime();
           const prevTs = new Date(prev.startedAt).getTime();
           if (Number.isFinite(nextTs) && Number.isFinite(prevTs)) {
-            // Optimistic running'iz: prev.runId === "pending" — gelen run runId
-            // farklı ama startedAt prev'ten daha eski ise (örn. bir önceki
-            // başarılı run) yok say.
             if (
               prev.status === "running" &&
               next.status !== "running" &&
@@ -104,11 +94,36 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
       } catch {
         // ağ hıçkırığı — bir sonraki tick tekrar dener
       }
+    };
+
+    const interval = setInterval(() => {
+      const startedAt = pollStartedAtRef.current ?? Date.now();
+      // 12dk timeout: interval'ı durdurmuyoruz, sadece bu tick'i atlıyoruz.
+      // Kullanıcı sekmeye döndüğünde visibilitychange handler 12dk'yi sıfırlar
+      // ve polling kaldığı yerden devam eder (background tab throttle / uzun
+      // bekleme sonrası self-heal).
+      if (Date.now() - startedAt > POLL_MAX_DURATION_MS) return;
+      void fetchAndUpdate();
     }, POLL_INTERVAL_MS);
+
+    // Tab visibility / focus: kullanıcı sekmeye döndüğünde anında bir fetch
+    // tetikle ve 12dk penceresini sıfırla. Chrome arka plan sekmeleri
+    // setInterval'ı agresif throttle ettiğinden, görünür hale gelindiğinde
+    // **mutlaka** bir kez DB durumu çekilmeli — aksi halde iş bitti ama kart
+    // "Çalışıyor" donar.
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      pollStartedAtRef.current = Date.now();
+      void fetchAndUpdate();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [isRunning, supplierSlug, currentRun, router]);
 
