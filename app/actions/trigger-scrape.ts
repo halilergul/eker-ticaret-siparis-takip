@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { dispatchScrapeWorkflow } from "@/lib/github/workflow-dispatch";
 import { createClient } from "@/lib/supabase/server";
 import { triggerInputSchema } from "@/lib/validations/schedule-form";
+import type { Json } from "@/lib/supabase/database.types";
 
 export type TriggerErrorCode =
   | "UNAUTHENTICATED"
@@ -78,14 +79,48 @@ export async function triggerScrape(
     return fail("ALREADY_RUNNING");
   }
 
+  // Pre-insert scrape_runs satırı — workflow_dispatch öncesi.
+  // Böylece UI'da "Çalışıyor" göstergesi sayfa yenileme sonrası da kalıcı
+  // olur (workflow başlatılması 15-40sn sürebiliyor; bu süre boyunca
+  // polling endpoint'i bu satırı görür). Workflow başladığında script
+  // pending_dispatch=true flag'li bu satırı pickup eder (run-logger.startRun).
+  const { data: preRun, error: preError } = await supabase
+    .from("scrape_runs")
+    .insert({
+      supplier_id: supplier.id,
+      status: "running",
+      trigger_type: "manual",
+      summary: { pending_dispatch: true } as unknown as Json,
+    })
+    .select("id")
+    .single();
+
+  if (preError || !preRun) {
+    console.error(
+      "[trigger-scrape] pre-insert run failed:",
+      preError?.message ?? "unknown",
+    );
+    return fail("INTERNAL_ERROR");
+  }
+
   const dispatch = await dispatchScrapeWorkflow({
     supplierSlug,
     triggerType: "manual",
   });
   if (!dispatch.ok) {
+    // Pre-insert ettiğimiz satırı orphan bırakma — aborted işaretle.
+    await supabase
+      .from("scrape_runs")
+      .update({
+        status: "aborted",
+        finished_at: new Date().toISOString(),
+        error_message: "workflow_dispatch failed (GitHub API)",
+      })
+      .eq("id", preRun.id);
     return fail("GITHUB_API_FAILED");
   }
 
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/settings");
 
   return {

@@ -12,11 +12,62 @@ export type ScrapeRunStatus =
 
 export type ScrapeRunTriggerType = "auto" | "manual" | "unknown";
 
+/**
+ * Pickup-or-create pattern:
+ *
+ * Manuel tetiklemelerde UI'da "Çalışıyor" göstergesinin sayfa yenileme sonrası
+ * da kalıcı olması için triggerScrape Server Action `scrape_runs` satırını
+ * **pre-insert** ediyor (summary.pending_dispatch=true flag'iyle). Workflow
+ * dispatch'i kabul edip runner ayağa kalktığında — typik olarak 15-40 sn
+ * sonra — bu fonksiyon o pending satırı **bulup pickup** eder, böylece DB'de
+ * yetim "pending" satır kalmaz ve UI tek satır gösterir.
+ *
+ * Sadece son 5 dakikadaki aynı supplier+manuel+running+pending_dispatch=true
+ * satırı pickup edilir. Bulunmazsa yeni satır insert edilir (auto/cron için
+ * de davranış böyle).
+ */
 export async function startRun(
   supplierId: string,
   triggerType: ScrapeRunTriggerType = "unknown",
 ): Promise<string> {
   const supabase = getServiceClient();
+
+  if (triggerType === "manual") {
+    const sinceIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { data: pending } = await supabase
+      .from("scrape_runs")
+      .select("id, summary")
+      .eq("supplier_id", supplierId)
+      .eq("trigger_type", "manual")
+      .eq("status", "running")
+      .gte("started_at", sinceIso)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const flag =
+      pending?.summary &&
+      typeof pending.summary === "object" &&
+      !Array.isArray(pending.summary) &&
+      (pending.summary as Record<string, unknown>).pending_dispatch === true;
+
+    if (pending && flag) {
+      // Pickup: pending_dispatch flag'ini temizle (summary'i sıfırla — script
+      // bundan sonra normal akışta dolduracak).
+      const { error } = await supabase
+        .from("scrape_runs")
+        .update({ summary: {} as unknown as Json })
+        .eq("id", pending.id);
+      if (error) {
+        console.error(
+          `[run-logger] pickup pending dispatch failed (${pending.id}): ${error.message}`,
+        );
+      }
+      return pending.id;
+    }
+  }
+
+  // Yeni satır: auto/cron veya manuel pickup'sız fallback
   const { data, error } = await supabase
     .from("scrape_runs")
     .insert({
