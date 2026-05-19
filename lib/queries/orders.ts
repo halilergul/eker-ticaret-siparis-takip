@@ -12,6 +12,21 @@ export type OrderTableRow = {
   orderedAt: string;
   totalAmount: number;
   currency: string;
+  items: OrderItemPreview[];
+};
+
+export type OrderItemPreview = {
+  id: string;
+  productId: string | null;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  unitPriceAtOrder: number;
+  /**
+   * Ürün görseli; Faz B'de products.image_url'den join ile gelecek.
+   * Şu an her zaman null — UI fallback (monogram) gösterir.
+   */
+  imageUrl: string | null;
 };
 
 export type OrderDetailItem = {
@@ -53,6 +68,7 @@ type OrderListRow = {
   total_amount: number;
   currency: string;
   supplier: SupplierJoin;
+  items: OrderItemRow[];
 };
 
 type OrderItemRow = {
@@ -84,7 +100,8 @@ export async function listOrders(
     .from("supplier_orders")
     .select(
       `id, order_no, status, ordered_at, total_amount, currency,
-       supplier:suppliers!inner ( slug, name )`,
+       supplier:suppliers!inner ( slug, name ),
+       items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order )`,
     )
     .order("ordered_at", { ascending: false });
 
@@ -149,6 +166,15 @@ function toOrderTableRow(r: OrderListRow): OrderTableRow {
     orderedAt: r.ordered_at,
     totalAmount: Number(r.total_amount),
     currency: r.currency,
+    items: (r.items ?? []).map((it) => ({
+      id: it.id,
+      productId: it.product_id,
+      productCode: it.product_code,
+      productName: it.product_name,
+      quantity: Number(it.quantity),
+      unitPriceAtOrder: Number(it.unit_price_at_order),
+      imageUrl: null, // Faz B: products.image_url join'inden gelecek
+    })),
   };
 }
 
