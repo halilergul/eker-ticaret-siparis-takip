@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
+
+import { Notice } from "@/components/ui/notice";
+import { FilterBar } from "@/components/features/orders/filter-bar";
+import { OrderTable } from "@/components/features/orders/order-table";
+import { SupplierTriggerCard } from "@/components/features/scrape/supplier-trigger-card";
 import {
   listDistinctStatuses,
   listOrders,
   listSuppliers,
 } from "@/lib/queries/orders";
-import { parseFilter } from "@/lib/validations/order-filter";
-import { FilterBar } from "@/components/features/orders/filter-bar";
-import { OrderTable } from "@/components/features/orders/order-table";
-import { SupplierTriggerCard } from "@/components/features/scrape/supplier-trigger-card";
-import { listSchedules } from "@/lib/queries/scrape-schedule";
 import { getLatestRunBySupplier } from "@/lib/queries/scrape-runs";
+import { listSchedules } from "@/lib/queries/scrape-schedule";
+import { parseFilter } from "@/lib/validations/order-filter";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Eker Ticaret",
+  title: "Komuta Paneli — Eker Ticaret",
 };
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -38,27 +40,50 @@ export default async function DashboardPage({ searchParams }: Props) {
         name: s.supplierName,
       },
       lastRun: await getLatestRunBySupplier(s.supplierId),
+      autoEnabled: s.enabled,
     })),
   );
 
+  const disabledSchedules = triggerCards
+    .filter((c) => !c.autoEnabled)
+    .map((c) => c.supplier.name);
+
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Sipariş Geçmişi
-          </h1>
-          <p className="text-sm text-slate-600">
-            Tedarikçi sitelerden çekilmiş sipariş kayıtları.
+    <main className="mx-auto max-w-7xl px-6 pb-12 lg:px-10">
+      {/* Page header */}
+      <header className="mb-7 flex items-start justify-between gap-6">
+        <div>
+          <div className="t-cap mb-2">{formatTodayCaption()}</div>
+          <h1 className="t-h1 m-0 text-slate-900">Komuta Paneli</h1>
+          <p className="mt-1.5 text-sm text-slate-600">
+            {schedules.length} tedarikçi
+            <span className="mx-2 text-slate-300">·</span>
+            {orders.length} sipariş takip ediliyor
           </p>
         </div>
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-          {orders.length} sipariş
-        </span>
       </header>
 
+      {/* Top notice: auto-scrape disabled */}
+      {disabledSchedules.length > 0 ? (
+        <div className="mb-6">
+          <Notice
+            intent="warning"
+            title="Otomatik scrape kapalı"
+            body={
+              disabledSchedules.length === schedules.length
+                ? "Tüm tedarikçiler için otomatik scrape kapalı. Veriler eski olabilir; manuel tetikleme gerekiyor."
+                : `${disabledSchedules.join(", ")} için otomatik scrape kapalı. Manuel tetikleme gerekiyor.`
+            }
+            cta={{ label: "Ayarlara git" }}
+            dismissible
+            persistKey="auto-scrape-disabled"
+          />
+        </div>
+      ) : null}
+
+      {/* Supplier trigger cards */}
       {triggerCards.length > 0 ? (
-        <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {triggerCards.map((card) => (
             <SupplierTriggerCard
               key={card.supplier.id}
@@ -69,7 +94,8 @@ export default async function DashboardPage({ searchParams }: Props) {
         </section>
       ) : null}
 
-      <section className="mt-8">
+      {/* Filter bar */}
+      <section className="mb-5">
         <FilterBar
           suppliers={suppliers}
           statuses={statuses}
@@ -78,9 +104,34 @@ export default async function DashboardPage({ searchParams }: Props) {
         />
       </section>
 
-      <section className="mt-6">
-        <OrderTable orders={orders} />
-      </section>
+      {/* Orders section header */}
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="t-h2 text-slate-900">Son siparişler</h2>
+        <span className="text-[13px] text-slate-500 tnum">
+          {orders.length} sipariş
+        </span>
+      </div>
+
+      {/* Orders accordion table */}
+      <OrderTable orders={orders} />
     </main>
   );
+}
+
+function formatTodayCaption(): string {
+  // "18.05.2026 · Pazartesi" — picked once on the server.
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Europe/Istanbul",
+  }).format(now);
+  const weekday = new Intl.DateTimeFormat("tr-TR", {
+    weekday: "long",
+    timeZone: "Europe/Istanbul",
+  }).format(now);
+  // Capitalize the first letter of the Turkish weekday
+  const weekdayCap = weekday.charAt(0).toLocaleUpperCase("tr-TR") + weekday.slice(1);
+  return `${date} · ${weekdayCap}`;
 }

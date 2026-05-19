@@ -1,10 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
+
+import { Chip } from "@/components/ui/chip";
 import type { SupplierOption } from "@/lib/queries/orders";
 import { ROUTES } from "@/lib/routes";
+
+/**
+ * Filter bar per design brief §3.11.
+ *
+ * Floating glass pill row — each filter rendered as a {@link Chip}. Active
+ * chips are slate-900 (solid); inactive chips are glass with slate-600 text.
+ * "Temizle" link clears all params.
+ */
 
 type Props = {
   suppliers: SupplierOption[];
@@ -36,61 +45,62 @@ export function FilterBar({
     });
   }
 
-  return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="filter-supplier"
-          className="text-xs font-medium text-slate-600"
-        >
-          Tedarikçi
-        </label>
-        <select
-          id="filter-supplier"
-          value={currentSupplier ?? ""}
-          onChange={(e) => setParam("supplier", e.target.value)}
-          disabled={isPending}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-        >
-          <option value="">Tüm tedarikçiler</option>
-          {suppliers.map((s) => (
-            <option key={s.slug} value={s.slug}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
+  function clearAll() {
+    startTransition(() => {
+      router.push(ROUTES.DASHBOARD);
+    });
+  }
 
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="filter-status"
-          className="text-xs font-medium text-slate-600"
-        >
-          Durum
-        </label>
-        <select
-          id="filter-status"
-          value={currentStatus ?? ""}
-          onChange={(e) => setParam("status", e.target.value)}
+  return (
+    <div className="et-glass flex flex-wrap items-center gap-2 rounded-full p-3">
+      <span className="px-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        Filtrele
+      </span>
+
+      <Chip
+        active={!currentSupplier}
+        onClick={() => setParam("supplier", "")}
+        disabled={isPending}
+      >
+        Tüm tedarikçiler
+      </Chip>
+      {suppliers.map((s) => (
+        <Chip
+          key={s.slug}
+          active={currentSupplier === s.slug}
+          onClick={() => setParam("supplier", s.slug)}
           disabled={isPending}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:opacity-60"
         >
-          <option value="">Tüm durumlar</option>
-          {statuses.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </div>
+          {s.name}
+        </Chip>
+      ))}
+
+      {statuses.length > 0 ? (
+        <div className="mx-1.5 h-5 w-px bg-slate-300/50" aria-hidden="true" />
+      ) : null}
+
+      {statuses.map((s) => (
+        <Chip
+          key={s}
+          active={currentStatus === s}
+          onClick={() => setParam("status", currentStatus === s ? "" : s)}
+          disabled={isPending}
+        >
+          {s}
+        </Chip>
+      ))}
+
+      <div className="flex-1" />
 
       {hasFilter ? (
-        <Link
-          href={ROUTES.DASHBOARD}
-          className="ml-auto text-sm text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+        <button
+          type="button"
+          onClick={clearAll}
+          disabled={isPending}
+          className="px-3 text-[13px] text-slate-600 underline underline-offset-[3px] hover:text-slate-900 et-focus rounded disabled:opacity-60"
         >
-          Filtreleri temizle
-        </Link>
+          Temizle
+        </button>
       ) : null}
     </div>
   );
