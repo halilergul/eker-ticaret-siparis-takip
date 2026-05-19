@@ -44,6 +44,15 @@ body {
   height: 100%;
 }
 
+/*
+  Reserve scrollbar gutter on every page so layout width stays identical
+  whether or not the page actually scrolls. Prevents jitter when navigating
+  between short (settings empty) and long (dashboard) pages.
+*/
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
