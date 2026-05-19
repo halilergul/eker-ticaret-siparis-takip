@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getOrderDetail } from "@/lib/queries/orders";
+
+import { PageShell } from "@/components/layout/page-shell";
 import { OrderDetailCard } from "@/components/features/orders/order-detail-card";
+import { getOrderDetail } from "@/lib/queries/orders";
 
 export const metadata: Metadata = {
   title: "Sipariş Detayı — Eker Ticaret",
@@ -17,8 +19,8 @@ export default async function OrderDetailPage({ params }: Props) {
   if (!detail) notFound();
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
+    <PageShell>
       <OrderDetailCard detail={detail} />
-    </main>
+    </PageShell>
   );
 }

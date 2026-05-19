@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageHeader, PageShell } from "@/components/layout/page-shell";
 import { Notice } from "@/components/ui/notice";
 import { FilterBar } from "@/components/features/orders/filter-bar";
 import { OrderTable } from "@/components/features/orders/order-table";
@@ -49,19 +50,18 @@ export default async function DashboardPage({ searchParams }: Props) {
     .map((c) => c.supplier.name);
 
   return (
-    <main className="mx-auto max-w-7xl px-6 pb-12 lg:px-10">
-      {/* Page header */}
-      <header className="mb-7 flex items-start justify-between gap-6">
-        <div>
-          <div className="t-cap mb-2">{formatTodayCaption()}</div>
-          <h1 className="t-h1 m-0 text-slate-900">Komuta Paneli</h1>
-          <p className="mt-1.5 text-sm text-slate-600">
+    <PageShell>
+      <PageHeader
+        caption={formatTodayCaption()}
+        title="Komuta Paneli"
+        subtitle={
+          <>
             {schedules.length} tedarikçi
             <span className="mx-2 text-slate-300">·</span>
             {orders.length} sipariş takip ediliyor
-          </p>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Top notice: auto-scrape disabled */}
       {disabledSchedules.length > 0 ? (
@@ -114,7 +114,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
       {/* Orders accordion table */}
       <OrderTable orders={orders} />
-    </main>
+    </PageShell>
   );
 }
 

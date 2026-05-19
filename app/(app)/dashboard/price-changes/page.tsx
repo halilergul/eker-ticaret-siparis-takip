@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+
+import { PageHeader, PageShell } from "@/components/layout/page-shell";
+import { PriceChangeTable } from "@/components/features/price-changes/price-change-table";
+import { WindowFilter } from "@/components/features/price-changes/window-filter";
 import {
   listAnySnapshotCount,
   listPriceChanges,
 } from "@/lib/queries/price-changes";
 import { parsePriceChangesFilter } from "@/lib/validations/price-changes-filter";
-import { PriceChangeTable } from "@/components/features/price-changes/price-change-table";
-import { WindowFilter } from "@/components/features/price-changes/window-filter";
 
 export const metadata: Metadata = {
   title: "Zamlanan Ürünler — Eker Ticaret",
@@ -25,30 +27,25 @@ export default async function PriceChangesPage({ searchParams }: Props) {
   ]);
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-10">
-      <header className="flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Zamlanan Ürünler
-          </h1>
-          <p className="text-sm text-slate-600">
-            Son {filter.windowDays} gün içinde KDV dahil özel birim fiyatı
-            değişen ürünler.
-          </p>
-        </div>
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-          {rows.length} ürün
-        </span>
-      </header>
+    <PageShell>
+      <PageHeader
+        title="Zamlanan Ürünler"
+        subtitle={`Son ${filter.windowDays} gün içinde KDV dahil özel birim fiyatı değişen ürünler.`}
+        actions={
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 tnum">
+            {rows.length} ürün
+          </span>
+        }
+      />
 
-      <section className="mt-6">
+      <section className="mb-5">
         <WindowFilter
           currentDays={filter.windowDays}
           currentShowDrops={filter.includeDrops}
         />
       </section>
 
-      <section className="mt-6">
+      <section>
         <PriceChangeTable
           rows={rows}
           hasAnySnapshot={anyCount > 0}
@@ -56,6 +53,6 @@ export default async function PriceChangesPage({ searchParams }: Props) {
           includeDrops={filter.includeDrops}
         />
       </section>
-    </main>
+    </PageShell>
   );
 }

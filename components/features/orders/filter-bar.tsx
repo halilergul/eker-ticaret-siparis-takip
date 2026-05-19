@@ -3,16 +3,17 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
-import { Chip } from "@/components/ui/chip";
+import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import type { SupplierOption } from "@/lib/queries/orders";
 import { ROUTES } from "@/lib/routes";
 
 /**
- * Filter bar per design brief §3.11.
+ * Filter bar per design brief §3.11 — glass pill row.
  *
- * Floating glass pill row — each filter rendered as a {@link Chip}. Active
- * chips are slate-900 (solid); inactive chips are glass with slate-600 text.
- * "Temizle" link clears all params.
+ * Original design used chip rows; we switched to compact dropdowns to stop
+ * the bar from wrapping into multiple rows once the supplier and status
+ * lists grew past 4-5 entries. Active dropdown trigger is slate-900 with
+ * the selected option's label inline.
  */
 
 type Props = {
@@ -51,44 +52,38 @@ export function FilterBar({
     });
   }
 
+  const supplierOptions = [
+    { value: "", label: "Tüm tedarikçiler" },
+    ...suppliers.map((s) => ({ value: s.slug, label: s.name })),
+  ];
+  const statusOptions = [
+    { value: "", label: "Tüm durumlar" },
+    ...statuses.map((s) => ({ value: s, label: s })),
+  ];
+
   return (
-    <div className="et-glass flex flex-wrap items-center gap-2 rounded-full p-3">
-      <span className="px-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+    <div className="et-glass flex flex-wrap items-center gap-2.5 rounded-full p-2.5 pl-4">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
         Filtrele
       </span>
 
-      <Chip
-        active={!currentSupplier}
-        onClick={() => setParam("supplier", "")}
+      <FilterDropdown
+        label="Tedarikçi"
+        options={supplierOptions}
+        value={currentSupplier}
+        onChange={(v) => setParam("supplier", v)}
         disabled={isPending}
-      >
-        Tüm tedarikçiler
-      </Chip>
-      {suppliers.map((s) => (
-        <Chip
-          key={s.slug}
-          active={currentSupplier === s.slug}
-          onClick={() => setParam("supplier", s.slug)}
-          disabled={isPending}
-        >
-          {s.name}
-        </Chip>
-      ))}
+      />
 
       {statuses.length > 0 ? (
-        <div className="mx-1.5 h-5 w-px bg-slate-300/50" aria-hidden="true" />
-      ) : null}
-
-      {statuses.map((s) => (
-        <Chip
-          key={s}
-          active={currentStatus === s}
-          onClick={() => setParam("status", currentStatus === s ? "" : s)}
+        <FilterDropdown
+          label="Durum"
+          options={statusOptions}
+          value={currentStatus}
+          onChange={(v) => setParam("status", v)}
           disabled={isPending}
-        >
-          {s}
-        </Chip>
-      ))}
+        />
+      ) : null}
 
       <div className="flex-1" />
 
