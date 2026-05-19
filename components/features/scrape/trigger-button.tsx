@@ -33,17 +33,13 @@ type Props = {
   initialLastRun: LastRunSnapshot;
 };
 
-type Message =
-  | { kind: "success"; text: string }
-  | { kind: "error"; text: string };
-
 const POLL_INTERVAL_MS = 5_000;
 const POLL_MAX_DURATION_MS = 12 * 60 * 1000;
 
 export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<Message | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentRun, setCurrentRun] = useState<LastRunSnapshot>(initialLastRun);
   const pollStartedAtRef = useRef<number | null>(null);
 
@@ -75,7 +71,32 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
         const next = (await res.json()) as LastRunSnapshot;
         if (cancelled) return;
         if (!next) return;
-        const prevStatus = currentRun?.status;
+
+        // **Yarış durumu koruması**: polling sadece "newer" run'ı kabul etsin.
+        // Eski (önceki tamamlanmış) run optimistic running state'i ezmesin.
+        // pre-insert pattern + workflow_dispatch async olduğundan, kullanıcı
+        // butona basıp henüz pre-insert prod'a deploy edilmeden polling yarışı
+        // patlatabilir. Bu kontrol: gelen run startedAt mevcut run'dan eski ya da
+        // farklı tamamlanmış run ise yok say.
+        const prev = currentRun;
+        if (prev) {
+          const nextTs = new Date(next.startedAt).getTime();
+          const prevTs = new Date(prev.startedAt).getTime();
+          if (Number.isFinite(nextTs) && Number.isFinite(prevTs)) {
+            // Optimistic running'iz: prev.runId === "pending" — gelen run runId
+            // farklı ama startedAt prev'ten daha eski ise (örn. bir önceki
+            // başarılı run) yok say.
+            if (
+              prev.status === "running" &&
+              next.status !== "running" &&
+              nextTs < prevTs
+            ) {
+              return;
+            }
+          }
+        }
+
+        const prevStatus = prev?.status;
         setCurrentRun(next);
         if (next.status !== "running" && prevStatus === "running") {
           router.refresh();
@@ -89,14 +110,16 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isRunning, supplierSlug, currentRun?.status, router]);
+  }, [isRunning, supplierSlug, currentRun, router]);
 
   function handleClick() {
-    setMessage(null);
+    setErrorMessage(null);
     startTransition(async () => {
       const result = await triggerScrape({ supplierSlug });
       if (result.ok) {
-        setMessage({ kind: "success", text: result.message });
+        // Success path'te inline mesaj YOK — buton zaten "Çalışıyor…"a dönüyor
+        // ve animasyonlu progress bar var; ek "Tetiklendi" satırı kart
+        // yüksekliğini sıçratıyordu.
         setCurrentRun({
           runId: "pending",
           status: "running",
@@ -109,7 +132,7 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
           errorsCount: 0,
         });
       } else {
-        setMessage({ kind: "error", text: result.message });
+        setErrorMessage(result.message);
       }
     });
   }
@@ -126,12 +149,11 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
           <div className="text-xs text-slate-500 tnum">tarama sürüyor</div>
         </div>
         <ProgressBar indeterminate intent="info" />
-        {message ? <StatusMessage message={message} /> : null}
       </div>
     );
   }
 
-  // Idle / success / failed: primary CTA pill + optional inline message
+  // Idle / success / failed: primary CTA pill + (optional) error inline
   return (
     <div className="space-y-2">
       <Button
@@ -145,23 +167,12 @@ export function TriggerButton({ supplierSlug, initialLastRun }: Props) {
       >
         {isPending ? "Tetikleniyor…" : "Kontrol et"}
       </Button>
-      {message ? <StatusMessage message={message} /> : null}
+      {errorMessage ? (
+        <p role="alert" className="mt-2 text-[13px] text-rose-600">
+          {errorMessage}
+        </p>
+      ) : null}
     </div>
-  );
-}
-
-function StatusMessage({ message }: { message: Message }) {
-  return (
-    <p
-      role="status"
-      className={
-        message.kind === "success"
-          ? "mt-2 text-[13px] text-emerald-600"
-          : "mt-2 text-[13px] text-rose-600"
-      }
-    >
-      {message.text}
-    </p>
   );
 }
 
