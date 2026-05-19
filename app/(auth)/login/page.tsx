@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+
 import { LoginForm } from "@/components/features/auth/login-form";
 
 export const metadata: Metadata = {
@@ -7,17 +8,26 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <header className="mb-6 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-            Eker Ticaret
-          </h1>
-          <p className="text-sm text-slate-600">
-            Devam etmek için giriş yapın.
-          </p>
-        </header>
-        <LoginForm />
+    <main className="et-page flex min-h-screen items-center justify-center px-6">
+      <div className="w-full max-w-md">
+        <div className="et-glass rounded-3xl p-10">
+          <header className="mb-7 flex flex-col items-center text-center">
+            <div
+              aria-hidden="true"
+              className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-slate-900 to-slate-700 text-amber-500 text-xl font-bold tracking-tight shadow-md"
+            >
+              ET
+            </div>
+            <h1 className="t-h2 m-0 text-slate-900">Hoş geldin</h1>
+            <p className="mt-1.5 text-sm text-slate-600">
+              Tedarikçi sipariş ve fiyat takip paneli
+            </p>
+          </header>
+          <LoginForm />
+        </div>
+        <p className="mt-6 text-center text-xs text-slate-400">
+          Eker Ticaret &middot; Nalbur Fiyat Takip
+        </p>
       </div>
     </main>
   );

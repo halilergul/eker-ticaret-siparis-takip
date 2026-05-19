@@ -27,7 +27,7 @@ export function LogoutMenu({ initial, email }: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Hesap menüsü — ${email}`}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-slate-900 ring-2 ring-white shadow-sm bg-gradient-to-br from-amber-400 to-amber-500 et-focus"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-slate-900 ring-2 ring-white shadow-sm bg-linear-to-br from-amber-400 to-amber-500 et-focus"
       >
         {initial}
       </button>

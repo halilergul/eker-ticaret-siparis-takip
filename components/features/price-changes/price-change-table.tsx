@@ -1,6 +1,15 @@
 import type { PriceChangeRow } from "@/lib/queries/price-changes";
+
 import { PriceChangeRowItem } from "./price-change-row";
 import { PriceChangesEmptyState } from "./price-changes-empty-state";
+
+/**
+ * Price-changes table per design brief §5.3.
+ *
+ * Solid white card (number legibility). Sticky header, slate-50 hover rows,
+ * tabular nums right-aligned. Trend indicator (colored ▲/▼ + delta %) sits
+ * in the Δ% column per §4.9.
+ */
 
 type Props = {
   rows: PriceChangeRow[];
@@ -26,18 +35,18 @@ export function PriceChangeTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_rgba(15,23,42,0.05)]">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-          <tr>
-            <th className="px-4 py-3">Ürün Kodu</th>
-            <th className="px-4 py-3">Ürün</th>
-            <th className="px-4 py-3">Tedarikçi</th>
-            <th className="px-4 py-3 text-right">Eski</th>
-            <th className="px-4 py-3 text-right">Yeni</th>
-            <th className="px-4 py-3 text-right">Δ %</th>
-            <th className="px-4 py-3 text-right">Δ ₺</th>
-            <th className="px-4 py-3 text-right">Sipariş</th>
+        <thead className="border-b border-slate-200 bg-slate-50">
+          <tr className="text-left">
+            <th className="t-cap px-5 py-3.5">Ürün Kodu</th>
+            <th className="t-cap px-4 py-3.5">Ürün</th>
+            <th className="t-cap px-4 py-3.5">Tedarikçi</th>
+            <th className="t-cap px-4 py-3.5 text-right">Eski</th>
+            <th className="t-cap px-4 py-3.5 text-right">Yeni</th>
+            <th className="t-cap px-4 py-3.5 text-right">Δ %</th>
+            <th className="t-cap px-4 py-3.5 text-right">Δ ₺</th>
+            <th className="t-cap px-5 py-3.5 text-right">Sipariş</th>
           </tr>
         </thead>
         <tbody>

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 
 import { saveSchedule } from "@/app/actions/save-schedule";
+import { Button } from "@/components/ui/button";
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 const ISTANBUL_OFFSET_HOURS = 3;
@@ -69,6 +70,7 @@ export function ScheduleForm({
     },
   });
 
+  const watchedEnabled = watch("enabled");
   const watchedIstHour = Number(watch("dailyHourIst")) || 0;
   const utcHourPreview = istToUtc(watchedIstHour);
 
@@ -94,28 +96,50 @@ export function ScheduleForm({
     });
   }
 
+  const switchId = `auto-${supplierSlug}`;
+  const hourId = `hour-${supplierSlug}`;
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <label className="flex items-center gap-3 text-sm text-stone-700">
-        <input
-          type="checkbox"
-          {...register("enabled")}
-          className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-        />
-        <span>Otomatik scrape aktif</span>
-      </label>
+      {/* Toggle switch */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <label
+            htmlFor={switchId}
+            className="block text-sm font-medium text-slate-900"
+          >
+            Otomatik scrape
+          </label>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Belirlenen saatte GitHub Actions tetiklenir.
+          </p>
+        </div>
+        <label htmlFor={switchId} className="inline-flex cursor-pointer items-center">
+          <input
+            id={switchId}
+            type="checkbox"
+            {...register("enabled")}
+            className="peer sr-only"
+          />
+          <span
+            aria-hidden="true"
+            className="relative inline-block h-6 w-11 rounded-full bg-slate-200 transition-colors peer-checked:bg-slate-900 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-900/30 peer-focus-visible:ring-offset-2"
+          >
+            <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
+          </span>
+        </label>
+      </div>
 
+      {/* Hour select — disabled if auto is off */}
       <div className="space-y-1">
-        <label
-          htmlFor={`hour-${supplierSlug}`}
-          className="block text-sm font-medium text-stone-700"
-        >
+        <label htmlFor={hourId} className="block text-[13px] font-medium text-slate-700">
           Günlük saat (Türkiye)
         </label>
         <select
-          id={`hour-${supplierSlug}`}
+          id={hourId}
           {...register("dailyHourIst", { valueAsNumber: true })}
-          className="block w-32 rounded-md border-stone-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          disabled={!watchedEnabled}
+          className="block w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none et-focus disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         >
           {HOUR_OPTIONS.map((h) => (
             <option key={h} value={h}>
@@ -123,26 +147,23 @@ export function ScheduleForm({
             </option>
           ))}
         </select>
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-slate-400 tnum">
           {pad(watchedIstHour)}:00 İstanbul = {pad(utcHourPreview)}:00 UTC
         </p>
       </div>
 
+      {/* Save + status */}
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={!isDirty || isPending}
-          className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-300"
-        >
-          {isPending ? "Kaydediliyor..." : "Kaydet"}
-        </button>
+        <Button kind="primary" size="md" type="submit" disabled={!isDirty || isPending}>
+          {isPending ? "Kaydediliyor…" : "Kaydet"}
+        </Button>
         {message ? (
           <p
             role="status"
             className={
               message.kind === "success"
-                ? "text-sm text-emerald-700"
-                : "text-sm text-rose-700"
+                ? "text-[13px] text-emerald-600"
+                : "text-[13px] text-rose-600"
             }
           >
             {message.text}

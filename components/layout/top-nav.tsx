@@ -29,7 +29,7 @@ export async function TopNav() {
   const initial = (user.email?.[0] ?? "?").toUpperCase();
 
   return (
-    <header className="absolute inset-x-6 top-4 z-20 mx-auto flex max-w-[1320px] items-center justify-center sm:inset-x-10">
+    <header className="absolute inset-x-6 top-4 z-20 mx-auto flex max-w-330 items-center justify-center sm:inset-x-10">
       <div className="et-glass flex h-16 w-full items-center gap-5 rounded-full pl-5 pr-4">
         {/* Brand */}
         <Link
@@ -38,7 +38,7 @@ export async function TopNav() {
         >
           <span
             aria-hidden="true"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-slate-900 to-slate-700 text-amber-500 text-sm font-bold tracking-tight"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-linear-to-br from-slate-900 to-slate-700 text-amber-500 text-sm font-bold tracking-tight"
           >
             ET
           </span>

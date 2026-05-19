@@ -44,27 +44,23 @@ export default async function ProductDetailPage({ params }: Props) {
 
   return (
     <PageShell>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <ProductHeaderCard product={product} />
 
         {sparklinePoints.length >= 2 ? (
-          <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="t-cap mb-2">Fiyat seyri</h2>
+          <section className="et-glass rounded-2xl p-5">
+            <h2 className="t-cap mb-3">Fiyat seyri</h2>
             <Sparkline points={sparklinePoints} />
           </section>
         ) : null}
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Snapshot Tarihçesi
-          </h2>
+        <section className="space-y-3">
+          <h2 className="t-h2 text-slate-900">Snapshot Tarihçesi</h2>
           <ProductHistoryTable snapshots={snapshots} />
         </section>
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Bu Ürünün Geçtiği Siparişler
-          </h2>
+        <section className="space-y-3">
+          <h2 className="t-h2 text-slate-900">Bu Ürünün Geçtiği Siparişler</h2>
           <ProductOrdersList orders={orders} />
         </section>
       </div>

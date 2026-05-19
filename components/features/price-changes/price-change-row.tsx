@@ -1,8 +1,17 @@
 import Link from "next/link";
+
+import { Icon } from "@/components/ui/icon";
+import { Trend } from "@/components/ui/trend";
+import { formatTry } from "@/lib/format/currency";
 import type { PriceChangeRow } from "@/lib/queries/price-changes";
 import { ROUTES } from "@/lib/routes";
-import { formatTry } from "@/lib/format/currency";
-import { formatTrPercent } from "@/lib/format/percent";
+
+/**
+ * Single row in the price-changes table.
+ *
+ * Δ% uses {@link Trend} (kind="price": up=rose because hike is bad for the
+ * merchant, down=emerald). Δ₺ uses matching color + signed format.
+ */
 
 type Props = {
   row: PriceChangeRow;
@@ -12,9 +21,9 @@ export function PriceChangeRowItem({ row }: Props) {
   const isUp = row.changeAmount > 0;
   const isDown = row.changeAmount < 0;
   const deltaColor = isUp
-    ? "text-rose-700"
+    ? "text-rose-600"
     : isDown
-      ? "text-emerald-700"
+      ? "text-emerald-600"
       : "text-slate-600";
   const signedAmount = isUp
     ? `+${formatTry(row.changeAmount)}`
@@ -23,8 +32,8 @@ export function PriceChangeRowItem({ row }: Props) {
       : formatTry(0);
 
   return (
-    <tr className="border-t border-slate-200 transition-colors hover:bg-slate-50">
-      <td className="px-4 py-3 font-mono text-xs text-slate-700">
+    <tr className="group border-t border-slate-100 transition-colors hover:bg-slate-50">
+      <td className="px-5 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-500">
         {row.productCode}
       </td>
       <td className="px-4 py-3">
@@ -38,30 +47,33 @@ export function PriceChangeRowItem({ row }: Props) {
           <p className="text-xs text-slate-500">{row.brand}</p>
         ) : null}
       </td>
-      <td className="px-4 py-3 text-slate-700">{row.supplierSlug}</td>
-      <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+      <td className="px-4 py-3 text-[13px] text-slate-600">{row.supplierSlug}</td>
+      <td className="px-4 py-3 text-right text-[13px] text-slate-600 tnum">
         {formatTry(row.oldPrice)}
       </td>
-      <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-900">
+      <td className="px-4 py-3 text-right text-sm font-medium text-slate-900 tnum">
         {formatTry(row.newPrice)}
       </td>
-      <td
-        className={`px-4 py-3 text-right tabular-nums font-medium ${deltaColor}`}
-      >
-        {formatTrPercent(row.changePct)}
+      <td className="px-4 py-3 text-right">
+        {row.changePct !== null ? (
+          <span className="inline-flex">
+            <Trend delta={row.changePct} kind="price" />
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
       </td>
-      <td
-        className={`px-4 py-3 text-right tabular-nums font-medium ${deltaColor}`}
-      >
+      <td className={`px-4 py-3 text-right text-sm font-medium tnum ${deltaColor}`}>
         {signedAmount}
       </td>
-      <td className="px-4 py-3 text-right">
+      <td className="px-5 py-3 text-right">
         {row.lastOrderId && row.lastOrderNo ? (
           <Link
             href={ROUTES.ORDER_DETAIL(row.lastOrderId)}
-            className="text-sm text-slate-600 hover:text-slate-900 hover:underline"
+            className="inline-flex items-center gap-1 text-[13px] text-slate-600 hover:text-slate-900 hover:underline"
           >
-            {row.lastOrderNo} →
+            {row.lastOrderNo}
+            <Icon name="chevR" size={12} />
           </Link>
         ) : (
           <span className="text-xs text-slate-400">—</span>

@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
+
+import { FilterDropdown } from "@/components/ui/filter-dropdown";
 import { DAYS_PRESETS } from "@/lib/constants/price-changes";
 import { ROUTES } from "@/lib/routes";
 
@@ -15,11 +17,9 @@ export function WindowFilter({ currentDays, currentShowDrops }: Props) {
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  function navigateWith(updates: { days?: number | null; showDrops?: boolean }) {
+  function navigateWith(updates: { days?: number; showDrops?: boolean }) {
     const sp = new URLSearchParams(searchParams.toString());
-    if (updates.days === null) {
-      sp.delete("days");
-    } else if (updates.days !== undefined) {
+    if (updates.days !== undefined) {
       sp.set("days", String(updates.days));
     }
     if (updates.showDrops !== undefined) {
@@ -32,46 +32,39 @@ export function WindowFilter({ currentDays, currentShowDrops }: Props) {
     });
   }
 
-  const isCustomDays = !DAYS_PRESETS.includes(currentDays as 7 | 14 | 30 | 90);
+  const dayOptions = DAYS_PRESETS.map((d) => ({
+    value: String(d),
+    label: `Son ${d} gün`,
+  }));
 
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="window-days"
-          className="text-xs font-medium text-slate-600"
-        >
-          Pencere
-        </label>
-        <select
-          id="window-days"
-          value={isCustomDays ? "custom" : String(currentDays)}
-          onChange={(e) => {
-            if (e.target.value === "custom") return;
-            navigateWith({ days: Number(e.target.value) });
-          }}
-          disabled={isPending}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-        >
-          {DAYS_PRESETS.map((d) => (
-            <option key={d} value={d}>
-              Son {d} gün
-            </option>
-          ))}
-          {isCustomDays ? (
-            <option value="custom">Son {currentDays} gün (özel)</option>
-          ) : null}
-        </select>
-      </div>
+    <div className="et-glass flex flex-wrap items-center gap-3 rounded-full p-2.5 pl-4">
+      <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+        Filtrele
+      </span>
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <FilterDropdown
+        label="Pencere"
+        options={dayOptions}
+        value={String(currentDays)}
+        onChange={(v) => navigateWith({ days: Number(v) })}
+        disabled={isPending}
+      />
+
+      <label className="inline-flex cursor-pointer items-center gap-2 px-2 text-[13px] text-slate-700">
         <input
           type="checkbox"
           checked={currentShowDrops}
           onChange={(e) => navigateWith({ showDrops: e.target.checked })}
           disabled={isPending}
-          className="h-4 w-4 rounded border-slate-300"
+          className="peer sr-only"
         />
+        <span
+          aria-hidden="true"
+          className="relative inline-block h-5 w-9 rounded-full bg-slate-200 transition-colors peer-checked:bg-slate-900"
+        >
+          <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
+        </span>
         Fiyat düşüşlerini de göster
       </label>
     </div>

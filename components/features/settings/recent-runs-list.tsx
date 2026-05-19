@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusPill } from "@/components/ui/status-pill";
 import { RunErrorDetails } from "@/components/features/settings/run-error-details";
 import { formatTrDateTime } from "@/lib/format/date";
 import { listRecentRuns, type ScrapeRunRow } from "@/lib/queries/scrape-runs";
@@ -14,12 +16,12 @@ const STATUS_LABEL: Record<ScrapeRunRow["status"], string> = {
   aborted: "Durduruldu",
 };
 
-const STATUS_CLASS: Record<ScrapeRunRow["status"], string> = {
-  running: "bg-sky-100 text-sky-800",
-  success: "bg-emerald-100 text-emerald-800",
-  partial: "bg-amber-100 text-amber-800",
-  failed: "bg-rose-100 text-rose-800",
-  aborted: "bg-stone-200 text-stone-800",
+const STATUS_INTENT: Record<ScrapeRunRow["status"], "info" | "success" | "warning" | "danger" | "neutral"> = {
+  running: "info",
+  success: "success",
+  partial: "warning",
+  failed: "danger",
+  aborted: "neutral",
 };
 
 const TRIGGER_LABEL: Record<ScrapeRunRow["triggerType"], string> = {
@@ -33,24 +35,26 @@ export async function RecentRunsList({ supplierId }: Props) {
 
   if (runs.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-stone-300 bg-stone-50 p-4 text-sm text-stone-600">
-        Henüz scrape yapılmadı — başlatmak için &quot;Kontrol et&quot;e basın.
-      </div>
+      <EmptyState
+        icon="clock"
+        title="Henüz scrape koşum geçmişi yok"
+        body="Başlatmak için 'Kontrol et'e basın."
+      />
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-stone-200">
-      <table className="min-w-full divide-y divide-stone-200 text-sm">
-        <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-          <tr>
-            <th className="px-3 py-2 font-medium">Tarih / Saat</th>
-            <th className="px-3 py-2 font-medium">Tip</th>
-            <th className="px-3 py-2 font-medium">Durum</th>
-            <th className="px-3 py-2 font-medium">Özet</th>
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <table className="w-full text-sm">
+        <thead className="border-b border-slate-200 bg-slate-50">
+          <tr className="text-left">
+            <th className="t-cap px-4 py-3">Tarih / Saat</th>
+            <th className="t-cap px-4 py-3">Tip</th>
+            <th className="t-cap px-4 py-3">Durum</th>
+            <th className="t-cap px-4 py-3">Özet</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-stone-100 bg-white">
+        <tbody>
           {runs.map((run) => (
             <RunRow key={run.id} run={run} />
           ))}
@@ -62,19 +66,17 @@ export async function RecentRunsList({ supplierId }: Props) {
 
 function RunRow({ run }: { run: ScrapeRunRow }) {
   return (
-    <tr>
-      <td className="whitespace-nowrap px-3 py-2 text-stone-700">
+    <tr className="border-t border-slate-100 hover:bg-slate-50">
+      <td className="whitespace-nowrap px-4 py-2.5 text-[13px] text-slate-700 tnum">
         {formatTrDateTime(run.startedAt)}
       </td>
-      <td className="px-3 py-2 text-stone-600">{TRIGGER_LABEL[run.triggerType]}</td>
-      <td className="px-3 py-2">
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[run.status]}`}
-        >
-          {STATUS_LABEL[run.status]}
-        </span>
+      <td className="px-4 py-2.5 text-[13px] text-slate-600">
+        {TRIGGER_LABEL[run.triggerType]}
       </td>
-      <td className="px-3 py-2 text-stone-600">
+      <td className="px-4 py-2.5">
+        <StatusPill intent={STATUS_INTENT[run.status]}>{STATUS_LABEL[run.status]}</StatusPill>
+      </td>
+      <td className="px-4 py-2.5 text-[13px] text-slate-600">
         <RunSummary run={run} />
         <RunErrorDetails errors={run.errorDetails} />
       </td>
@@ -82,11 +84,7 @@ function RunRow({ run }: { run: ScrapeRunRow }) {
   );
 }
 
-function formatCount(
-  label: string,
-  inserted: number,
-  skipped: number,
-): string | null {
+function formatCount(label: string, inserted: number, skipped: number): string | null {
   if (inserted === 0 && skipped === 0) return null;
   if (skipped === 0) return `${inserted} ${label}`;
   if (inserted === 0) return `0 yeni · ${skipped} mevcut ${label}`;
@@ -95,19 +93,15 @@ function formatCount(
 
 function RunSummary({ run }: { run: ScrapeRunRow }) {
   if (run.status === "running") {
-    return <span className="text-stone-500">Devam ediyor…</span>;
+    return <span className="text-slate-500">Devam ediyor…</span>;
   }
   const parts: string[] = [];
-  const orderText = formatCount(
-    "sipariş",
-    run.ordersInserted,
-    run.ordersSkipped,
-  );
+  const orderText = formatCount("sipariş", run.ordersInserted, run.ordersSkipped);
   const itemText = formatCount("satır", run.itemsInserted, run.itemsSkipped);
   if (orderText) parts.push(orderText);
   if (itemText) parts.push(itemText);
   if (run.snapshotsAdded > 0) parts.push(`${run.snapshotsAdded} snapshot`);
   if (run.errorsCount > 0) parts.push(`${run.errorsCount} hata`);
-  if (parts.length === 0) return <span className="text-stone-400">—</span>;
-  return <span>{parts.join(" · ")}</span>;
+  if (parts.length === 0) return <span className="text-slate-400">—</span>;
+  return <span className="tnum">{parts.join(" · ")}</span>;
 }
