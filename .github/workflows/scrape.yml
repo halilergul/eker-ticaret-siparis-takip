@@ -13,6 +13,7 @@ on:
           - enderyapi
           - ikizler
           - leventsimsek
+          - yedekler
       trigger_type:
         description: 'Tetikleme tipi'
         required: false
@@ -41,6 +42,9 @@ jobs:
       IKIZLER_PASSWORD: ${{ secrets.IKIZLER_PASSWORD }}
       LEVENTSIMSEK_USERNAME: ${{ secrets.LEVENTSIMSEK_USERNAME }}
       LEVENTSIMSEK_PASSWORD: ${{ secrets.LEVENTSIMSEK_PASSWORD }}
+      YEDEKLER_CUSTOMER_CODE: ${{ secrets.YEDEKLER_CUSTOMER_CODE }}
+      YEDEKLER_USER_CODE: ${{ secrets.YEDEKLER_USER_CODE }}
+      YEDEKLER_PASSWORD: ${{ secrets.YEDEKLER_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
