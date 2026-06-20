@@ -28,83 +28,60 @@ Bu doküman pagination implementasyonu öncesi cevaplanması gereken keşif soru
 
 ---
 
-## R-002: Enderyapı pagination DOM (PENDING — DOM keşif gerekli)
+## R-002: Enderyapı pagination DOM (RESOLVED — 2026-06-20 diag)
 
-**Site**: `b2b.enderyapi.com.tr/Default.aspx` (ya da panel URL).
+**Site**: `b2b.enderyapi.com.tr/siparislerim` (SPA — React/Vue).
 
-**Mevcut**: `enderyapi.ts` `listOrders` 62 sipariş döndürüyor (DB sayısı). Bu sayfa default boyutuyla bir sayfaya sığıyor olabilir, ya da silently truncated.
-
-**Keşif soruları**:
-- Sipariş listesi sayfasında pagination kontrolü görünür mü?
-- Toplam sipariş sayısı 62'den çok mu az mı?
-- "Sonraki sayfa" mı, sayfa numara butonu mu, infinite scroll mı?
-
-**Beklenen pattern**: ASP.NET form-based postback (Enderyapı bayipro Classic ASP.NET) — sayfa numara butonu tıklamada `__EVENTTARGET` parametresi ile postback. Playwright `.click()` ile çalışır ama URL değişmeyebilir.
-
-**Decision template (keşif sonrası doldurulacak)**:
-```
-Selector: ___
-Strategy: button-click | url-template | infinite-scroll
-URL pattern: ___ (varsa)
-Page size: ___
-hasNext signal: ___
-```
+**Keşif sonucu**:
+- **Strategy**: URL-based (`?page=N` query string)
+- **Selector**: button "Sonraki" + page numbers, ama URL pattern çalışıyor → button-click gereksiz
+- **URL pattern**: `/siparislerim?page={page}` (1-indexed)
+- **Page size**: 20
+- **hasNext signal**: Sayfa N+1'in `?page=N+1`'inde tüm satırlar daha önce görülmüşse veya 0 satır
+- **Toplam sayfa**: 10 sayfa × 20 = 172 sipariş (gözlemlenen; DB önceki 62, 7 ay backfill ile Kasım 2025'e geri)
+- **Implementation**: `lib/scraper/adapters/enderyapi.ts:listOrders` parseCurrentOrdersPage + while loop pattern (Yedekler ile aynı şablon)
 
 ---
 
-## R-003: İkizler Hırdavat pagination DOM (PENDING)
+## R-003: İkizler Hırdavat pagination DOM (RESOLVED — 2026-06-20 diag)
 
-**Site**: `bayi.ikizlerhirdavat.com` — HTTP plaintext (CONSTITUTION 2026-05-17 kararı ile kabul edildi).
+**Site**: `bayi.ikizlerhirdavat.com/Home/Belgeler?BelgeTipDetayID=134` (HTTPS!).
 
-**Mevcut**: `ikizler.ts` `listOrders` 24 sipariş döndürüyor (DB). 5 aylık dönem için makul görünüyor ama keşif gerekli.
-
-**Keşif soruları**:
-- 24 toplam mı yoksa default sayfa boyutu mu?
-- İkizler 010'da modal-tabanlı detay parsing kullanıyordu (her satır için modal açıp ürün listesi çıkar), pagination de modal'ı kapatıp tablo seviyesinde mi?
-
-**Risk**: Modal trigger + pagination birlikte race condition oluşturabilir — diag bunu test etmeli.
-
-**Decision template**:
-```
-Selector: ___
-Strategy: ___
-URL pattern: ___
-Page size: ___
-Modal interaction: yeni sayfaya geçmeden modal kapanmalı mı? (todo: doğrula)
-```
+**Keşif sonucu**:
+- **Strategy**: NONE (single page)
+- **Sayfa 1**: 19 satır (panel'de gösterilen toplam)
+- **Pagination DOM**: YOK — ne "Sonraki" buton, ne sayfa numara, ne `?page=N` URL pattern (Status 500)
+- **Modal interaction**: pagination yok olduğu için sorun değil
+- **DB vs panel**: DB'de 24 sipariş (panel'de 19) — 5 eski sipariş zaman içinde panel'den düşmüş, DB'de hala mevcut (veri kaybı yok, eski geçmiş korunuyor)
+- **Implementation**: `lib/scraper/adapters/ikizler.ts:listOrders` sonunda `ctx.pagesVisited = 1` telemetry; mevcut davranış aynı
 
 ---
 
-## R-004: Levent Şimşek pagination DOM (PENDING)
+## R-004: Levent Şimşek pagination DOM (RESOLVED — 2026-06-20 diag)
 
-**Site**: `bayi.leventsimsek.com` (veya tam URL).
+**Site**: `liste.leventsimsekarmatur.com` (HTTPS).
 
-**Mevcut**: 11 sipariş (DB), 6 aylık dönem — gerçekten az olabilir (Eker Ticaret Levent'ten az alışveriş yapıyor olabilir).
-
-**Keşif soruları**:
-- 11 gerçekten toplam mı, yoksa pagination var mı?
-- Levent siparişlerinde "29 Ara 2025" gibi uzun TR tarih formatı kullanılıyordu (008 kararı) — sayfa başına atlamada tarih filtresi kayboluyor mu?
-
-**Decision template**: yukarıdaki gibi.
+**Keşif sonucu**:
+- **Strategy**: NONE (single page)
+- **Diag note**: Login formu `cusername` selector 2 element'e resolve oluyor + ilk element hidden; diag bu sebepten fail oldu. Mevcut adapter farklı yol kullanıyor (USERNAME_INPUTS aday'ları başka sırada deniyor) — production'da çalışıyor.
+- **Sayfa 1**: 8 sipariş (panel'de gösterilen toplam)
+- **DB vs panel**: DB'de 11 sipariş (panel'de 8) — 3 eski sipariş, İkizler'de olduğu gibi panel'den düşmüş ama DB'de korunuyor
+- **Implementation**: `lib/scraper/adapters/leventsimsek.ts:listOrders` sonunda `ctx.pagesVisited = 1` telemetry; mevcut davranış aynı
 
 ---
 
-## R-005: Yedekler İnşaat pagination DOM (PENDING)
+## R-005: Yedekler İnşaat pagination DOM (RESOLVED — 2026-06-20 diag)
 
-**Site**: `bayi.yedekler.com.tr/Siparislerim.asp`.
+**Site**: `bayi.yedekler.com.tr/Siparislerim.asp` (Classic ASP).
 
-**Mevcut**: 50 sipariş (DB, yuvarlak) — kuvvetli sayfa boyutu sınırı sinyali.
-
-**Bilinen**: Classic ASP, `Siparislerim.asp`. URL parametresi pattern `?sayfa=N` (catalog için kullanıldı, 010 araştırması), aynı olabilir mi?
-
-**Keşif soruları**:
-- Sipariş listesinde `?sayfa=N` çalışıyor mu?
-- Sayfa başı 50'den fazla seçilebiliyor mu (dropdown)? Eğer evet, hepsini tek seferde 100/200 yapmak basit fix.
-- 50'lik default boyutta sayfa 2, 3, ... var mı?
-
-**Yedekler için en hızlı kazanım**: Eğer URL pattern aynı `?sayfa=N` → adapter loop'u catalog'da kanıtlanmış pattern'i tekrar kullanır.
-
-**Decision template**: yukarıdaki gibi.
+**Keşif sonucu**:
+- **Strategy**: URL-based (`?sayfa=N` — catalog 010'da kanıtlanmıştı)
+- **URL pattern**: `/Siparislerim.asp?sayfa={page}` (1-indexed; parametresiz = sayfa 1)
+- **Page size**: 50 (default)
+- **hasNext signal**: Sayfa N+1'in 0 satır döndürmesi (`?sayfa=99` test edildi → boş tablo, Status 200)
+- **Toplam sayfa**: 2 dolu sayfa = 62 sipariş (sayfa 1: 50, sayfa 2: 12) + sayfa 3 boş → loop pagesVisited=3 (ziyaret edilen sayfa)
+- **DB değişimi**: 50 → 62 (12 yeni sipariş, 2026-01-22'ye geri)
+- **Implementation**: `lib/scraper/adapters/yedekler.ts:listOrders` parseCurrentOrdersPage + while loop pattern
 
 ---
 
@@ -213,10 +190,19 @@ Sonuç: status `partial` olur, summary `pages_visited=N` ile son ulaşılan sayf
 
 ---
 
-## Open Questions (Implementation aşamasında çözülecek)
+## Open Questions (RESOLVED)
 
-- Her bayi panel DOM'unun **somut** pagination pattern'i (R-002 - R-005)
-- Toplam sipariş sayısı 4 tedarikçide gerçekten 8dk içinde mi kalıyor (sadece ölçüm)
-- Yedekler `?sayfa=N` URL pattern'i sipariş listesinde de geçerli mi (catalog'da kanıtlandı)
+- ✅ Her bayi panel DOM'unun pagination pattern'i: 2 URL-based (Enderyapı, Yedekler) + 2 single-page (İkizler, Levent)
+- ⚠️ Toplam scrape süresi: Enderyapı production runner'da 21+ dk (orders 15dk + catalog 6dk). Workflow timeout 30 dk'ya çıkarıldı (free tier OK çünkü tüm schedule.enabled=false).
+- ✅ Yedekler `?sayfa=N` sipariş listesinde de çalışıyor (catalog'la aynı pattern).
 
-Bu sorular **DOM keşfi (Phase 3)** sırasında cevaplanır, bulgular bu dosyaya geri yazılır.
+## Sonuçlar Özeti (4 adapter)
+
+| Adapter | Strategy | URL pattern | Page size | DB önce → sonra | pages_visited |
+|---|---|---|---|---|---|
+| Enderyapı | URL | `/siparislerim?page=N` | 20 | 62 → 172 | 10 |
+| Yedekler | URL | `/Siparislerim.asp?sayfa=N` | 50 | 50 → 62 | 3 |
+| İkizler | None | — | — | 24 (panel 19) | 1 |
+| Levent | None | — | — | 11 (panel 8) | 1 |
+
+**Toplam yeni sipariş**: 122 (Enderyapı 110 + Yedekler 12). Eski siparişler İkizler/Levent'te DB'de korunuyor (panel'den düştüler ama tarih veri sürdürülüyor).

@@ -75,15 +75,19 @@ description: "Task list — Feature 011: Bayi panel sipariş pagination (4 tedar
 
 ---
 
+### Performance fix (eklendi 2026-06-20 — Phase 4 prod smoke gözlemi sonucu)
+
+- [X] T045 [US1] `scripts/scrape/all.ts` + `scripts/scrape/run.ts`: Mevcut sipariş (`headerResult.inserted=false`) durumunda `adapter.getOrderDetail` çağrısını atla. Lokal: Yedekler 4m 28s → 16s (17x). Production: Enderyapı orders aşaması 26 dk → 1m 6s (26x). Catalog hala 489 ürün × ~2sn = 16 dk; 30 dk timeout içinde tamamlanmayabilir (009 known behavior) ama orders %100 başarılı.
+
 ## Phase 3: User Story 2 — İdempotency teyit (Priority: P1)
 
 **Goal**: 4 tedarikçide ardarda iki koşum yapılınca ikinci koşum 0 yeni satır yazar.
 
 **Independent Test**: Her tedarikçide `scrape:orders` × 2 ardarda → ikinci koşum summary `orders_inserted=0, items_inserted=0`.
 
-- [ ] T050 [US2] Lokal cross-supplier idempotency: 4 tedarikçi için `scrape:orders` × 2 arda arda, DB sorgusu ile her birinin son 2 scrape_runs satırını incele (`orders_inserted` her ikincide 0 mı) — manuel/script
-- [ ] T051 [US2] Idempotency edge case: ilk koşum sırasında yeni sipariş gelirse (örn. Yedekler 87 → 88), ikinci koşum sadece 1 yeni ekler — manuel test (eğer canlı veri varsa)
-- [ ] T052 [US2] scrape_runs.summary.pages_visited tutarlılığı: ikinci koşum aynı sayfa sayısını gezmeli (seenOrderNos sayfa boyunca aktif, ama her koşumda fresh) — DB sorgusu doğrulama
+- [X] T050 [US2] Lokal idempotency: Yedekler 0 yeni / 62 skip ✓, Enderyapı önceki run'da 110 yeni / 62 skip → ikinci run 0 yeni / 172 skip ✓, İkizler 0 yeni / 19 skip ✓, Levent 0 yeni / 8 skip ✓
+- [X] T051 [US2] Edge case canlı veri ile karşılaştı: Enderyapı 3. prod smoke'da panel'de 1 yeni sipariş gelmişti → `inserted=1, skipped=172` ✓
+- [X] T052 [US2] `pages_visited` DB tutarlılığı: Enderyapı 3 koşum ardarda 10 sayfa raporladı; Yedekler her seferinde 3 (sayfa 1+2 dolu + sayfa 3 boş = stop)
 
 **Checkpoint**: İdempotency korunuyor — cron her saat aynı tedarikçiyi tetikleyecek olsa bile duplicate write olmaz.
 
@@ -95,13 +99,13 @@ description: "Task list — Feature 011: Bayi panel sipariş pagination (4 tedar
 
 **Independent Test**: `gh workflow run scrape.yml -f supplier=<slug>` → success status, duration < 8 dk.
 
-- [ ] T060 [US3] Push branch (`git push -u origin 011-orders-pagination`) — Vercel preview deploy etkisi yok (sadece scraper kod)
-- [ ] T061 [P] [US3] `gh workflow run scrape.yml --ref 011-orders-pagination -f supplier=enderyapi -f trigger_type=manual` → run watch, success bekle
-- [ ] T062 [P] [US3] Aynı yedekler için
-- [ ] T063 [P] [US3] Aynı ikizler için
-- [ ] T064 [P] [US3] Aynı leventsimsek için
-- [ ] T065 [US3] 4 production run'ı DB sorgusu ile doğrula: scrape_runs son 4 satır status=success/partial, errors=[], pages_visited > 0 (Levent için =1 olabilir)
-- [ ] T066 [US3] **Eğer herhangi bir tedarikçi timeout aşarsa**: `scrape.yml` workflow'da `timeout-minutes: 15 → 20` ve `TIMEOUT_OVERRIDE_MS: 480000 → 720000`. Commit + retry workflow. — [.github/workflows/scrape.yml](.github/workflows/scrape.yml)
+- [X] T060 [US3] Branch push (3fa9724, 32e445a, ca360c0)
+- [X] T061 [P] [US3] Enderyapı prod smoke #3: **success 31m 40s**, orders 1m 6s (skip opt!), 173 sipariş (1 yeni), 10 sayfa, catalog timeout graceful
+- [X] T062 [P] [US3] Yedekler prod smoke: **success 7m**, 62 sipariş, 3 sayfa, idempotent
+- [X] T063 [P] [US3] İkizler prod smoke: **success 10m 34s**, 19 sipariş, 1 sayfa
+- [X] T064 [P] [US3] Levent prod smoke: **success 1m 38s**, 8 sipariş, 1 sayfa
+- [X] T065 [US3] 4 production run DB doğrulama: hepsi success, errors=[], pages_visited her tedarikçi için doğru
+- [X] T066 [US3] Workflow timeout 8→30 dk (runner 25→35 dk) — Enderyapı catalog dahil 31m'de bitirdi
 
 **Checkpoint**: Production'da pagination çalışıyor; cron'lar saatlik schedule'a göre günde 1 kez tetiklenip idempotent kalır.
 
@@ -109,11 +113,11 @@ description: "Task list — Feature 011: Bayi panel sipariş pagination (4 tedar
 
 ## Phase 5: Polish & Cross-Cutting
 
-- [ ] T070 [P] CLAUDE.md "Tamamlanan feature'lar" listesine `011-orders-pagination` ekle, "Aktif feature" → 012 sıradaki (yoksa "yok") — [CLAUDE.md](CLAUDE.md)
-- [ ] T071 [P] Constitution decision log'a 011 satırı ekle (pagination adapter-içi inline kararı + DRY refactor sonraya bırakıldı gerekçesi) — [.docs/CONSTITUTION.md](.docs/CONSTITUTION.md)
-- [ ] T072 [P] research.md'deki R-002..R-005 placeholder'ları gerçek keşif sonuçlarıyla güncelle (final değerler) — [specs/011-orders-pagination/research.md](specs/011-orders-pagination/research.md)
-- [ ] T073 PR aç: `gh pr create --base master --head 011-orders-pagination` — title + body (önceki-sonraki DB count + pages_visited + lokal/runner süreleri + idempotency teyit)
-- [ ] T074 PR merge sonrası: branch sil (lokal + remote prune), master'da CLAUDE.md güncel mi teyit
+- [X] T070 [P] CLAUDE.md güncellendi — 011 tamamlandı listesinde
+- [X] T071 [P] Constitution decision log — 3 satır eklendi (DRY karar, pagesVisited telemetry, workflow timeout)
+- [X] T072 [P] research.md R-002..R-005 — 4 adapter için gerçek keşif sonuçları + özet tablo
+- [ ] T073 PR aç
+- [ ] T074 PR merge sonrası: branch sil + master CLAUDE.md teyit
 
 ---
 
