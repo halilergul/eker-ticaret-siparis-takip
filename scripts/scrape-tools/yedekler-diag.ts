@@ -35,7 +35,7 @@ import {
   LOGIN_SUCCESS_MARKERS,
 } from "@/lib/scraper/adapters/yedekler.constants";
 
-type Phase = "login" | "orders" | "order-detail" | "catalog" | "all";
+type Phase = "login" | "orders" | "order-detail" | "catalog" | "orders-pagination" | "all";
 
 const DIAG_ROOT = path.resolve(process.cwd(), "tmp/yedekler-diag");
 
@@ -44,7 +44,7 @@ function parseArgs(): { phase: Phase; headed: boolean } {
   const phaseIdx = args.indexOf("--phase");
   const phase = (phaseIdx >= 0 ? args[phaseIdx + 1] : "login") as Phase;
   const headed = args.includes("--headed");
-  if (!["login", "orders", "order-detail", "catalog", "all"].includes(phase)) {
+  if (!["login", "orders", "order-detail", "catalog", "orders-pagination", "all"].includes(phase)) {
     console.error(`Geçersiz --phase: ${phase}`);
     process.exit(1);
   }
@@ -66,7 +66,7 @@ async function tryGoto(page: Page, paths: readonly string[]): Promise<string | n
   for (const p of paths) {
     const url = SITE_BASE_URL + p;
     try {
-      const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+      const resp = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45_000 });
       if (resp && resp.status() < 400) {
         console.log(`  ↪ Navigated: ${url} (${resp.status()})`);
         return p;
@@ -205,6 +205,92 @@ async function phaseOrderDetail(page: Page) {
   console.log(`  Final URL: ${page.url()}`);
 }
 
+async function phaseOrdersPagination(page: Page) {
+  console.log("\n=== Phase: orders-pagination ===");
+  const phaseDir = path.join(DIAG_ROOT, "orders-pagination");
+
+  // 1) Default sayfa (sayfa 1)
+  const ordersPath = await tryGoto(page, ORDER_HISTORY_PATHS);
+  if (!ordersPath) {
+    console.error("  ❌ Orders URL bulunamadı");
+    return;
+  }
+  await page.waitForTimeout(1500);
+  await dumpPage(page, phaseDir, "page-1-default");
+
+  // Sayfa 1 üzerinde satır sayısı ve "pagination control" işaretleri
+  const rows1 = await page.locator("table#sort tbody tr").count();
+  console.log(`  Sayfa 1: ${rows1} sipariş satırı`);
+
+  // Pagination DOM işaretleri ara — Bootstrap pagination yaygın
+  const paginationCandidates = [
+    "ul.pagination",
+    "nav.pagination",
+    "div.pagination",
+    "a[href*='sayfa=']",
+    "a[href*='page=']",
+    "a:has-text('Sonraki')",
+    "a:has-text('Next')",
+    "a:has-text('»')",
+  ];
+  console.log("\n  Pagination DOM candidate'ları:");
+  for (const sel of paginationCandidates) {
+    const c = await page.locator(sel).count();
+    if (c > 0) {
+      console.log(`    ✓ "${sel}" → ${c} eşleşme`);
+      // İlk eşleşmenin href'ini de yaz
+      try {
+        const first = page.locator(sel).first();
+        const href = await first.getAttribute("href").catch(() => null);
+        const text = (await first.textContent().catch(() => null))?.trim();
+        if (href || text) console.log(`       href="${href ?? ""}" text="${text ?? ""}"`);
+      } catch {/* noop */}
+    }
+  }
+
+  // Tüm <a href> içinde "sayfa" geçenleri listele
+  const allHrefs = await page.locator("a").evaluateAll(
+    (els) => els
+      .map((el) => (el as HTMLAnchorElement).getAttribute("href") ?? "")
+      .filter((h) => /sayfa|page/i.test(h)),
+  );
+  console.log(`\n  href'inde 'sayfa' veya 'page' geçen ${allHrefs.length} link:`);
+  for (const h of allHrefs.slice(0, 20)) console.log(`    ${h}`);
+
+  // 2) ?sayfa=2 dene
+  console.log("\n  → ?sayfa=2 deneniyor");
+  const sayfa2Url = SITE_BASE_URL + "/Siparislerim.asp?sayfa=2";
+  try {
+    const resp = await page.goto(sayfa2Url, { waitUntil: "domcontentloaded", timeout: 15_000 });
+    console.log(`  Status: ${resp?.status()}`);
+    await page.waitForTimeout(1000);
+    const rows2 = await page.locator("table#sort tbody tr").count();
+    console.log(`  Sayfa 2: ${rows2} sipariş satırı`);
+    await dumpPage(page, phaseDir, "page-2-via-sayfa-query");
+
+    // sayfa 2'deki ilk orderNo sayfa 1'deki ilk orderNo'dan farklı mı?
+    if (rows2 > 0) {
+      const firstOrderNo = (await page.locator("table#sort tbody tr td:nth-child(1)").first().textContent())?.trim();
+      console.log(`  Sayfa 2 ilk orderNo: ${firstOrderNo}`);
+    }
+  } catch (e) {
+    console.log(`  ?sayfa=2 hata: ${(e as Error).message}`);
+  }
+
+  // 3) ?sayfa=99 (out-of-range) dene
+  console.log("\n  → ?sayfa=99 (out-of-range) deneniyor");
+  try {
+    const resp = await page.goto(SITE_BASE_URL + "/Siparislerim.asp?sayfa=99", { waitUntil: "domcontentloaded", timeout: 10_000 });
+    console.log(`  Status: ${resp?.status()}`);
+    await page.waitForTimeout(800);
+    const rows99 = await page.locator("table#sort tbody tr").count();
+    console.log(`  Sayfa 99: ${rows99} sipariş satırı (out-of-range bekleniyor)`);
+    await dumpPage(page, phaseDir, "page-99-out-of-range");
+  } catch (e) {
+    console.log(`  ?sayfa=99 hata: ${(e as Error).message}`);
+  }
+}
+
 async function phaseCatalog(page: Page) {
   console.log("\n=== Phase: catalog ===");
   const phaseDir = path.join(DIAG_ROOT, "catalog");
@@ -254,6 +340,7 @@ async function main() {
 
     if (phase === "orders" || phase === "all") await phaseOrders(page);
     if (phase === "order-detail" || phase === "all") await phaseOrderDetail(page);
+    if (phase === "orders-pagination" || phase === "all") await phaseOrdersPagination(page);
     if (phase === "catalog" || phase === "all") await phaseCatalog(page);
 
     console.log("\n✅ Diag complete. Artifact'ları incele ve yedekler.constants.ts'i refine et.");

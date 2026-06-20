@@ -43,6 +43,8 @@ import {
   CATALOG_FIRST_PAGE_PATHS,
   CATALOG_PAGE_URL_TEMPLATES,
   CATALOG_MAX_PAGES,
+  ORDER_LIST_PAGE_URL_TEMPLATE,
+  ORDER_LIST_MAX_PAGES,
   DEFAULT_VAT_RATE,
 } from "./yedekler.constants";
 
@@ -229,102 +231,123 @@ async function navigateToOrdersPage(ctx: ScrapeContext): Promise<void> {
   throw new ScrapeError({ mode: "network", step: "navigate-orders" });
 }
 
-async function listOrders(
+/** Mevcut sayfanın sipariş satırlarını parse eder (DOM tablosundan).
+ *  Pagination loop her sayfa için bu helper'ı çağırır. */
+async function parseCurrentOrdersPage(
   ctx: ScrapeContext,
-  limit?: number,
+  pageLabel: string,
 ): Promise<RawOrderSummary[]> {
-  await navigateToOrdersPage(ctx);
   const { page } = ctx;
   await page.waitForTimeout(800);
 
-  // Tabloyu bul
   const table = page.locator(ORDER_LIST_SELECTORS.TABLE).first();
   if ((await table.count()) === 0) {
-    await saveDebugScreenshot(page, ctx.debugDir, "yedekler-orders-no-table");
-    throw new ScrapeError({ mode: "unexpected-dom", step: "orders-table" });
+    await saveDebugScreenshot(page, ctx.debugDir, `yedekler-orders-no-table-${pageLabel}`);
+    return [];
   }
 
   const rows = await table.locator(ORDER_LIST_SELECTORS.ROW).all();
-  vlog(ctx, `${rows.length} sipariş satırı bulundu`);
+  vlog(ctx, `${pageLabel}: ${rows.length} sipariş satırı bulundu`);
+  if (rows.length === 0) return [];
 
-  if (rows.length === 0) {
-    throw new ScrapeError({ mode: "empty-history", step: "no-rows" });
-  }
-
-  const results: RawOrderSummary[] = [];
-  const max = limit && limit > 0 ? Math.min(limit, rows.length) : rows.length;
-
-  for (let i = 0; i < max; i++) {
+  const out: RawOrderSummary[] = [];
+  for (let i = 0; i < rows.length; i++) {
     try {
       const row = rows[i];
       if (!row) continue;
 
       // Siparislerim.asp sütun sırası: Sipariş Kodu | Tutar | Tarih | Kanal | Durum | Detaylar
-
-      // Sipariş kodu (1. sütun, text-only)
-      const orderNo = (
-        (await row.locator(ORDER_LIST_SELECTORS.ORDER_NO_CELL).textContent()) ?? ""
-      ).trim();
-
+      const orderNo = ((await row.locator(ORDER_LIST_SELECTORS.ORDER_NO_CELL).textContent()) ?? "").trim();
       if (!orderNo) {
-        ctx.pushError(
-          "parse-order-row",
-          "unexpected-dom",
-          `Satır ${i + 1}: orderNo boş`,
-        );
+        ctx.pushError("parse-order-row", "unexpected-dom", `${pageLabel} satır ${i + 1}: orderNo boş`);
         continue;
       }
 
-      // Tutar (2. sütun): "3.752,58 TL"
-      const amountText = (
-        (await row.locator(ORDER_LIST_SELECTORS.TOTAL_AMOUNT_CELL).textContent()) ??
-        ""
-      ).trim();
+      const amountText = ((await row.locator(ORDER_LIST_SELECTORS.TOTAL_AMOUNT_CELL).textContent()) ?? "").trim();
       const totalAmount = parseTrPrice(amountText) ?? 0;
 
-      // Tarih (3. sütun): "19.06.2026"
-      const dateText = (
-        (await row.locator(ORDER_LIST_SELECTORS.ORDERED_AT_CELL).textContent()) ?? ""
-      ).trim();
+      const dateText = ((await row.locator(ORDER_LIST_SELECTORS.ORDERED_AT_CELL).textContent()) ?? "").trim();
       const orderedAt = parseTrDateShort(dateText);
       if (!orderedAt) {
-        ctx.pushError(
-          "parse-order-row",
-          "unexpected-dom",
-          `Satır ${i + 1}: tarih parse edilemedi (raw="${dateText}")`,
-        );
+        ctx.pushError("parse-order-row", "unexpected-dom", `${pageLabel} satır ${i + 1}: tarih parse edilemedi (raw="${dateText}")`);
         continue;
       }
 
-      // Durum (5. sütun): "Tamamlandı" / "Bekleyen" / "İptal"
-      const statusText = (
-        (await row.locator(ORDER_LIST_SELECTORS.STATUS_LABEL).textContent()) ?? ""
-      ).trim();
+      const statusText = ((await row.locator(ORDER_LIST_SELECTORS.STATUS_LABEL).textContent()) ?? "").trim();
 
-      // Detail URL (6. sütun): "Görüntüle" buton-link
       const detailEl = row.locator(ORDER_LIST_SELECTORS.DETAIL_LINK).first();
       const detailHref = (await detailEl.getAttribute("href")) ?? "";
       const detailUrl = detailHref.startsWith("http")
         ? detailHref
         : `${SITE_BASE_URL}/${detailHref.replace(/^\//, "")}`;
 
-      results.push({
-        orderNo,
-        status: statusText || "Bilinmiyor",
-        orderedAt,
-        totalAmount,
-        detailUrl,
-      });
+      out.push({ orderNo, status: statusText || "Bilinmiyor", orderedAt, totalAmount, detailUrl });
     } catch (err) {
-      ctx.pushError(
-        "parse-order-row",
-        "unexpected-dom",
-        `Satır ${i + 1}: ${(err as Error).message}`,
-      );
+      ctx.pushError("parse-order-row", "unexpected-dom", `${pageLabel} satır ${i + 1}: ${(err as Error).message}`);
+    }
+  }
+  return out;
+}
+
+async function listOrders(
+  ctx: ScrapeContext,
+  limit?: number,
+): Promise<RawOrderSummary[]> {
+  // 011 pagination: /Siparislerim.asp?sayfa=N. Sayfa 1 default 50, sayfa 2+ kalan.
+  // Boş sayfa veya seenOrderNos tekrar dön → stop. MAX_PAGES safety.
+  await navigateToOrdersPage(ctx); // sayfa 1 (parametresiz)
+  const { page } = ctx;
+
+  const results: RawOrderSummary[] = [];
+  const seenOrderNos = new Set<string>();
+  let pageIndex = 1;
+
+  while (pageIndex <= ORDER_LIST_MAX_PAGES) {
+    const pageLabel = `Sayfa ${pageIndex}`;
+    const pageRows = await parseCurrentOrdersPage(ctx, pageLabel);
+
+    let addedThisPage = 0;
+    for (const row of pageRows) {
+      if (seenOrderNos.has(row.orderNo)) continue;
+      seenOrderNos.add(row.orderNo);
+      results.push(row);
+      addedThisPage++;
+      if (limit && limit > 0 && results.length >= limit) {
+        ctx.pagesVisited = pageIndex;
+        vlog(ctx, `Limit ${limit} ulaşıldı; sayfa ${pageIndex} ortasında durduruluyor`);
+        return results;
+      }
+    }
+
+    // İlk sayfada hiç satır yoksa empty-history (genel başarısızlık)
+    if (pageIndex === 1 && pageRows.length === 0) {
+      throw new ScrapeError({ mode: "empty-history", step: "no-rows" });
+    }
+
+    // Sonraki sayfaya geç ya da dur
+    if (addedThisPage === 0) {
+      vlog(ctx, `Sayfa ${pageIndex}: yeni satır yok (boş veya tüm tekrar), pagination durduruluyor`);
+      break;
+    }
+
+    pageIndex++;
+    const nextUrl = SITE_BASE_URL + ORDER_LIST_PAGE_URL_TEMPLATE.replace("{page}", String(pageIndex));
+    try {
+      const resp = await page.goto(nextUrl, { waitUntil: "domcontentloaded", timeout: TIMEOUTS.NAVIGATION_MS });
+      if (!resp || resp.status() >= 400) {
+        vlog(ctx, `Sayfa ${pageIndex}: status ${resp?.status() ?? "?"}, durduruluyor`);
+        pageIndex--; // gezilmedi
+        break;
+      }
+    } catch (e) {
+      vlog(ctx, `Sayfa ${pageIndex}: navigate fail ${(e as Error).message}, durduruluyor`);
+      pageIndex--; // gezilmedi
+      break;
     }
   }
 
-  vlog(ctx, `${results.length} sipariş başarıyla parse edildi`);
+  ctx.pagesVisited = pageIndex;
+  vlog(ctx, `Pagination: ${pageIndex} sayfa, ${results.length} sipariş`);
   return results;
 }
 

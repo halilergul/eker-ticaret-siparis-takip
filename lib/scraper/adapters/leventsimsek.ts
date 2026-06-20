@@ -568,6 +568,10 @@ async function listOrders(
   }
 
   vlog(ctx, `${results.length} sipariş başlığı parse edildi`);
+  // 011 telemetry — Levent Şimşek bayi paneli single-page. Diag 2026-06-20:
+  // login hidden form (cusername 2 element) — adapter mevcut flow ile çalışıyor.
+  // Pagination DOM keşfi gereksiz, strategy=none.
+  ctx.pagesVisited = 1;
   return results;
 }
 
