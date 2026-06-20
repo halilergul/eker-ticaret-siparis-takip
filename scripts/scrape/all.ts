@@ -213,8 +213,19 @@ async function orderPhase(
     if (!order) continue;
     try {
       const headerResult = await writeOrderHeader(supplierId, order);
-      if (headerResult.inserted) summary.orders_inserted++;
-      else summary.orders_skipped++;
+      if (headerResult.inserted) {
+        summary.orders_inserted++;
+      } else {
+        // 011: Sipariş DB'de zaten var → detail parse'i atla. order_items zaten
+        // önceki koşumda yazıldı (mevcut idempotency). Bu, pagination ile gelen
+        // 172 sipariş için saatlerce sürebilecek "her seferinde detail parse"
+        // davranışını engelliyor (~6sn/sipariş → 17 dk kazanç @ 172 mevcut).
+        summary.orders_skipped++;
+        if (args.verbose || (i + 1) % 5 === 0) {
+          process.stdout.write(`[scrape:all]   ${i + 1}/${orders.length} mevcut, detay atlandı\r`);
+        }
+        continue;
+      }
 
       const detail = await adapter.getOrderDetail(ctx, order);
       const itemsResult = await writeOrderItems(supplierId, headerResult.orderId, detail.items);

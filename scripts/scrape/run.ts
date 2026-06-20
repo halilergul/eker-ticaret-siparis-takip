@@ -204,8 +204,16 @@ async function runScrape(args: Args): Promise<void> {
 
       try {
         const headerResult = await writeOrderHeader(supplierId, order);
-        if (headerResult.inserted) summary.orders_inserted++;
-        else summary.orders_skipped++;
+        if (headerResult.inserted) {
+          summary.orders_inserted++;
+        } else {
+          // 011: Mevcut sipariş → detail parse atla (idempotent skip optimization).
+          summary.orders_skipped++;
+          if (args.verbose || (i + 1) % 5 === 0) {
+            process.stdout.write(`[scrape]   ${i + 1}/${orders.length} mevcut, detay atlandı\r`);
+          }
+          continue;
+        }
 
         const detail = await adapter.getOrderDetail(ctx, order);
         const itemsResult = await writeOrderItems(supplierId, headerResult.orderId, detail.items);
