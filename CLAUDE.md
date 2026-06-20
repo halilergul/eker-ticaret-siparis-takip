@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: `010-yedekler-supplier` — 4. tedarikçi (Yedekler İnşaat) eklenmesi; sipariş + catalog scrape. Plan: [specs/010-yedekler-supplier/plan.md](specs/010-yedekler-supplier/plan.md)
+**Aktif feature**: yok — sıradaki adım `011` bayi panel sipariş pagination (4 tedarikçi listOrders eksik sayfaları gezsin).
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
@@ -174,6 +174,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - `007-scrape-automation` — [spec](specs/007-scrape-automation/spec.md) (settings UI + workflow_dispatch + GH Actions cron + GitHub Secrets göçü; **G15 kapandı**)
 - `008-multi-supplier-orders` — [spec](specs/008-multi-supplier-orders/spec.md) (İkizler + Levent Şimşek adapter'ları; sipariş scrape; catalog 009'a ertelendi)
 - `009-multi-supplier-catalog` — [spec](specs/009-multi-supplier-catalog/spec.md) (İkizler + Levent Şimşek catalog scrape; writePriceSnapshot idempotency + barkod fallback + cron exit 78 hotfix)
+- `010-yedekler-supplier` — [spec](specs/010-yedekler-supplier/spec.md) (4. tedarikçi Yedekler İnşaat: 3-alanlı login, sipariş + catalog scrape, ~157 ürün; dashboard pagination 20/sayfa)
 
 **Prod URL**: https://siparis.ekerticaret.com.tr (alias: https://eker-ticaret-siparis-takip.vercel.app)
 
