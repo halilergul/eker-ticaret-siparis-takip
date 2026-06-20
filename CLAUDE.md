@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: yok — sıradaki adım `011` bayi panel sipariş pagination (4 tedarikçi listOrders eksik sayfaları gezsin).
+**Aktif feature**: `011-orders-pagination` — 4 tedarikçi listOrders'ında pagination loop (tüm sipariş geçmişini DB'ye çekme). Plan: [specs/011-orders-pagination/plan.md](specs/011-orders-pagination/plan.md)
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
