@@ -4,6 +4,7 @@ import { PageHeader, PageShell } from "@/components/layout/page-shell";
 import { Notice } from "@/components/ui/notice";
 import { FilterBar } from "@/components/features/orders/filter-bar";
 import { OrderTable } from "@/components/features/orders/order-table";
+import { OrdersPagination } from "@/components/features/orders/orders-pagination";
 import { SupplierTriggerCard } from "@/components/features/scrape/supplier-trigger-card";
 import {
   listDistinctStatuses,
@@ -26,12 +27,13 @@ type Props = {
 
 export default async function DashboardPage({ searchParams }: Props) {
   const filter = parseFilter(await searchParams);
-  const [orders, suppliers, statuses, schedules] = await Promise.all([
+  const [ordersResult, suppliers, statuses, schedules] = await Promise.all([
     listOrders(filter),
     listSuppliers(),
     listDistinctStatuses(),
     listSchedules(),
   ]);
+  const { rows: orders, totalCount, page, totalPages } = ordersResult;
 
   const triggerCards = await Promise.all(
     schedules.map(async (s) => ({
@@ -58,7 +60,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           <>
             {schedules.length} tedarikçi
             <span className="mx-2 text-slate-300">·</span>
-            {orders.length} sipariş takip ediliyor
+            {totalCount} sipariş takip ediliyor
           </>
         }
       />
@@ -83,7 +85,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
       {/* Supplier trigger cards */}
       {triggerCards.length > 0 ? (
-        <section className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {triggerCards.map((card) => (
             <SupplierTriggerCard
               key={card.supplier.id}
@@ -108,12 +110,21 @@ export default async function DashboardPage({ searchParams }: Props) {
       <div className="mb-3 flex items-baseline justify-between">
         <h2 className="t-h2 text-slate-900">Son siparişler</h2>
         <span className="text-[13px] text-slate-500 tnum">
-          {orders.length} sipariş
+          {totalCount} sipariş
         </span>
       </div>
 
       {/* Orders accordion table */}
       <OrderTable orders={orders} />
+
+      {totalPages > 1 ? (
+        <OrdersPagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={ordersResult.pageSize}
+        />
+      ) : null}
     </PageShell>
   );
 }

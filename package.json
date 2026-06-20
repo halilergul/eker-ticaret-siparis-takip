@@ -12,7 +12,8 @@
     "scrape": "tsx scripts/scrape/run.ts",
     "scrape:catalog": "tsx scripts/scrape/catalog.ts",
     "scrape:all": "tsx scripts/scrape/all.ts",
-    "scrape:enderyapi": "tsx scripts/scrape/enderyapi.ts"
+    "scrape:enderyapi": "tsx scripts/scrape/enderyapi.ts",
+    "diag:yedekler": "tsx scripts/scrape-tools/yedekler-diag.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

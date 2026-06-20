@@ -60,6 +60,9 @@ scrape-debug/
 # Geçici keşif script'leri (009 catalog scrape DOM discovery — gitignored, throw-away)
 scripts/scrape-diag/
 
+# Diag artifact'ları (HTML dump, screenshot — 010 Yedekler keşif çıktıları)
+tmp/
+
 # Logs
 *.log
 npm-debug.log*

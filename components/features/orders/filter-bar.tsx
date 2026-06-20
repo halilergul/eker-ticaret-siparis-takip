@@ -39,6 +39,7 @@ export function FilterBar({
     const sp = new URLSearchParams(searchParams.toString());
     if (value) sp.set(key, value);
     else sp.delete(key);
+    sp.delete("page"); // filtre değişince ilk sayfaya dön
     const qs = sp.toString();
     const target = qs ? `${ROUTES.DASHBOARD}?${qs}` : ROUTES.DASHBOARD;
     startTransition(() => {

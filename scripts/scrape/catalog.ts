@@ -246,9 +246,12 @@ async function runCatalog(args: Args): Promise<void> {
     await fs.mkdir(debugDir, { recursive: true });
 
     browser = await chromium.launch({ headless: !args.headed });
+    // 2026-06-20: Yedekler için diag setup'ı eşle (locale/timezone/UA YOK; sadece viewport).
+    // Sebep: locale="tr-TR" veya timezone="Europe/Istanbul" set edildiğinde
+    // Yedekler ASP backend Urunler.asp'ta 500 dönüyor (kesin neden belirsiz).
+    // Diag --phase catalog setup'ı bu konfigürasyonla 200 dönüyor.
     const context = await browser.newContext({
-      locale: "tr-TR",
-      timezoneId: "Europe/Istanbul",
+      viewport: { width: 1440, height: 900 },
     });
     ctx.page = await context.newPage();
 
