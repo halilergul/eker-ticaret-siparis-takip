@@ -1,7 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
-import type { FilterState } from "@/lib/validations/order-filter";
+import {
+  ORDERS_PAGE_SIZE,
+  type FilterState,
+} from "@/lib/validations/order-filter";
 
 export type { FilterState } from "@/lib/validations/order-filter";
+
+export type OrderListResult = {
+  rows: OrderTableRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
 export type OrderTableRow = {
   id: string;
@@ -95,9 +106,14 @@ type OrderDetailRow = {
 };
 
 export async function listOrders(
-  filter: FilterState = {},
-): Promise<OrderTableRow[]> {
+  filter: FilterState = { page: 1 },
+): Promise<OrderListResult> {
   const supabase = await createClient();
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = ORDERS_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
   let query = supabase
     .from("supplier_orders")
     .select(
@@ -105,8 +121,10 @@ export async function listOrders(
        supplier:suppliers!inner ( slug, name ),
        items:order_items ( id, product_id, product_code, product_name, quantity, unit_price_at_order,
          product:products ( image_url ) )`,
+      { count: "exact" },
     )
-    .order("ordered_at", { ascending: false });
+    .order("ordered_at", { ascending: false })
+    .range(from, to);
 
   if (filter.supplierSlug) {
     query = query.eq("supplier.slug", filter.supplierSlug);
@@ -115,10 +133,17 @@ export async function listOrders(
     query = query.eq("status", filter.status);
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) throw new Error(`listOrders failed: ${error.message}`);
   const rows = (data ?? []) as unknown as OrderListRow[];
-  return rows.map(toOrderTableRow);
+  const totalCount = count ?? 0;
+  return {
+    rows: rows.map(toOrderTableRow),
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+  };
 }
 
 export async function getOrderDetail(id: string): Promise<OrderDetail | null> {

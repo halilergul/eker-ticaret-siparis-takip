@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.bayipro.com" },
       { protocol: "https", hostname: "liste.leventsimsekarmatur.com" },
       { protocol: "http", hostname: "bayi.ikizlerhirdavat.com" },
+      // Yedekler İnşaat (010) — admin paneli CDN
+      { protocol: "https", hostname: "adm.yedekler.com.tr" },
     ],
   },
 };

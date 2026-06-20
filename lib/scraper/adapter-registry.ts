@@ -3,11 +3,13 @@ import type { Adapter } from "./types";
 import { enderyapiAdapter } from "./adapters/enderyapi";
 import { ikizlerAdapter } from "./adapters/ikizler";
 import { leventsimsekAdapter } from "./adapters/leventsimsek";
+import { yedeklerAdapter } from "./adapters/yedekler";
 
 export const adapters: Record<string, Adapter> = {
   enderyapi: enderyapiAdapter,
   ikizler: ikizlerAdapter,
   leventsimsek: leventsimsekAdapter,
+  yedekler: yedeklerAdapter,
 };
 
 export function getAdapter(slug: string): Adapter {

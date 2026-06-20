@@ -364,6 +364,11 @@ async function runAll(args: Args): Promise<void> {
     const context = await browser.newContext({
       locale: "tr-TR",
       timezoneId: "Europe/Istanbul",
+      // Yedekler (010) bot/headless tespitini bypass için modern Chrome UA.
+      // Default Playwright UA "HeadlessChrome" içerir → bazı B2B siteleri
+      // (Yedekler dahil) bunu tespit edip login'i sessizce reddediyor.
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     });
     ctx.page = await context.newPage();
 

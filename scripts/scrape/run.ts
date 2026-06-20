@@ -172,6 +172,9 @@ async function runScrape(args: Args): Promise<void> {
     const context = await browser.newContext({
       locale: "tr-TR",
       timezoneId: "Europe/Istanbul",
+      // Yedekler (010) bot/headless tespiti için modern Chrome UA override.
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     });
     ctx.page = await context.newPage();
 
