@@ -29,11 +29,13 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       SUPPLIER: ${{ github.event.inputs.supplier || 'enderyapi' }}
       TRIGGER_TYPE: ${{ github.event.inputs.trigger_type || (github.event_name == 'schedule' && 'auto' || 'manual') }}
-      TIMEOUT_OVERRIDE_MS: '480000'  # 8 dk — runner'da Playwright + network yavaş, 5dk default yetmiyor (36+ ürün)
+      # 011: 4 supplier pagination ile ilk koşum Enderyapı 172 sipariş × ~3sn ≈ 9 dk.
+      # +login, +catalog ≈ 15-18 dk pratik. Sonraki koşumlar idempotent skip ile ~3 dk.
+      TIMEOUT_OVERRIDE_MS: '1200000'  # 20 dk (runner timeout-minutes 25 ile uyumlu)
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ENDERYAPI_USERNAME: ${{ secrets.ENDERYAPI_USERNAME }}

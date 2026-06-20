@@ -412,6 +412,9 @@ async function listOrders(
   }
 
   vlog(ctx, `${results.length} sipariş başlığı parse edildi`);
+  // 011 telemetry — İkizler bayi paneli single-page (Home/Belgeler?BelgeTipDetayID=134).
+  // Diag 2026-06-20: 19 satır, pagination DOM yok (?page=N → Status 500). Strategy: none.
+  ctx.pagesVisited = 1;
   return results;
 }
 

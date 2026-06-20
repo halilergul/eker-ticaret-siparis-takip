@@ -204,7 +204,9 @@ async function orderPhase(
   console.log("[scrape:all] Sipariş listesi okunuyor...");
   const orders = await adapter.listOrders(ctx, args.limit);
   summary.orders_total = orders.length;
-  console.log(`[scrape:all] ${orders.length} sipariş bulundu`);
+  if (ctx.pagesVisited !== undefined) summary.pages_visited = ctx.pagesVisited;
+  const pagesNote = ctx.pagesVisited !== undefined ? ` (${ctx.pagesVisited} sayfa)` : "";
+  console.log(`[scrape:all] ${orders.length} sipariş bulundu${pagesNote}`);
 
   for (let i = 0; i < orders.length; i++) {
     const order = orders[i];

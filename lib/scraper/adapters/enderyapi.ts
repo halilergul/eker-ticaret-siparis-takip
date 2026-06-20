@@ -17,6 +17,8 @@ import {
   ORDER_HISTORY_PATHS,
   LOGIN_SELECTORS,
   ORDER_LIST_SELECTORS,
+  ORDER_LIST_PAGE_URL_TEMPLATE,
+  ORDER_LIST_MAX_PAGES,
   PRODUCT_DETAIL_SELECTORS,
   TIMEOUTS,
 } from "@/scripts/scrape/constants";
@@ -259,57 +261,36 @@ async function navigateToOrdersPage(ctx: ScrapeContext): Promise<void> {
   });
 }
 
-async function listOrders(
+/** Mevcut sayfanın sipariş satırlarını parse eder. Pagination loop her sayfa için çağırır. */
+async function parseCurrentOrdersPage(
   ctx: ScrapeContext,
-  limit?: number,
+  pageLabel: string,
 ): Promise<RawOrderSummary[]> {
-  await navigateToOrdersPage(ctx);
   const { page } = ctx;
 
-  vlog(ctx, "Sipariş satırları parse ediliyor");
-  const rowSelector = await tryFindSelector(
-    page,
-    ORDER_LIST_SELECTORS.ROW_CONTAINERS,
-  );
-  if (!rowSelector) {
-    throw new ScrapeError({
-      mode: "unexpected-dom",
-      step: "orders-row-selector",
-    });
-  }
+  const rowSelector = await tryFindSelector(page, ORDER_LIST_SELECTORS.ROW_CONTAINERS);
+  if (!rowSelector) return [];
 
   const rows = await page.locator(rowSelector).all();
-  vlog(ctx, `${rows.length} satır bulundu`);
-  if (rows.length === 0) {
-    throw new ScrapeError({ mode: "empty-history", step: "no-rows" });
-  }
+  vlog(ctx, `${pageLabel}: ${rows.length} satır`);
 
-  const results: RawOrderSummary[] = [];
-  const max = limit && limit > 0 ? Math.min(limit, rows.length) : rows.length;
-
-  for (let i = 0; i < max; i++) {
+  const out: RawOrderSummary[] = [];
+  for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-
     try {
       const rowText = (await row.textContent()) ?? "";
       const cells = await row.locator("td, [class*='cell']").allTextContents();
 
-      // detail link: href içinde `id=<n>` veya `/tr/siparis-detay?id=...`
       const linkEl = row.locator("a").first();
       const linkHref = await linkEl.getAttribute("href").catch(() => null);
       const detailUrl = linkHref
-        ? linkHref.startsWith("http")
-          ? linkHref
-          : `${SITE_BASE_URL}${linkHref}`
+        ? linkHref.startsWith("http") ? linkHref : `${SITE_BASE_URL}${linkHref}`
         : undefined;
 
-      // order_no: cell array'inin ilk metin hücresi (ESP018xxxx pattern beklenir)
-      // veya detailUrl'deki id parametresi
       let orderNo = "";
       for (const cell of cells) {
         const t = cell.trim();
-        // ESP018-12345 veya ESP019-XXXX gibi pattern'lar; sayı + harf
         if (/^[A-Z]{2,4}[\d-]+/.test(t) || /^\d{6,}$/.test(t)) {
           orderNo = t;
           break;
@@ -320,11 +301,10 @@ async function listOrders(
         if (idMatch) orderNo = `ID-${idMatch[1]}`;
       }
       if (!orderNo) {
-        vlog(ctx, `Satır ${i + 1}: order_no bulunamadı, atlanıyor`);
+        vlog(ctx, `${pageLabel} satır ${i + 1}: order_no bulunamadı`);
         continue;
       }
 
-      // status: "Onaylandı", "Onay bekliyor", "İptal" vb.
       let status = "Bilinmiyor";
       for (const cell of cells) {
         const t = cell.trim();
@@ -334,60 +314,104 @@ async function listOrders(
         }
       }
 
-      // ordered_at: tarih hücresi
       let orderedAt: string | null = null;
       for (const cell of cells) {
         const parsed = parseTrDate(cell.trim());
-        if (parsed) {
-          orderedAt = parsed;
-          break;
-        }
+        if (parsed) { orderedAt = parsed; break; }
       }
       if (!orderedAt) {
         const m = rowText.match(/(\d{2}[./-]\d{2}[./-]\d{4}|\d{4}-\d{2}-\d{2})/);
         if (m) orderedAt = parseTrDate(m[0]);
       }
       if (!orderedAt) {
-        vlog(ctx, `Satır ${i + 1}: tarih bulunamadı, atlanıyor (orderNo=${orderNo})`);
+        vlog(ctx, `${pageLabel} satır ${i + 1}: tarih bulunamadı (orderNo=${orderNo})`);
         continue;
       }
 
-      // total_amount: ilk fiyat-like değer
       let totalAmount: number | null = null;
       const priceMatches = rowText.match(/[\d.]+,\d{2}\s*(?:₺|TL|TRY)?/g);
       if (priceMatches && priceMatches.length > 0) {
-        // Sipariş listesinde genelde son hücre toplam tutar; son fiyatı al
         const last = priceMatches[priceMatches.length - 1];
-        if (last) {
-          totalAmount = parseTrPrice(last);
-        }
+        if (last) totalAmount = parseTrPrice(last);
       }
-      if (totalAmount === null) {
-        vlog(ctx, `Satır ${i + 1}: tutar bulunamadı, 0 ile devam (orderNo=${orderNo})`);
-        totalAmount = 0;
-      }
+      if (totalAmount === null) totalAmount = 0;
 
-      results.push({
-        orderNo,
-        status,
-        orderedAt,
-        totalAmount,
-        detailUrl,
-      });
+      out.push({ orderNo, status, orderedAt, totalAmount, detailUrl });
     } catch (err) {
-      vlog(ctx, `Satır ${i + 1} parse hata: ${String(err).slice(0, 100)}`);
+      vlog(ctx, `${pageLabel} satır ${i + 1} parse hata: ${String(err).slice(0, 100)}`);
+    }
+  }
+  return out;
+}
+
+async function listOrders(
+  ctx: ScrapeContext,
+  limit?: number,
+): Promise<RawOrderSummary[]> {
+  // 011 pagination: /siparislerim?page=N (page size 20). SPA URL pattern,
+  // direkt navigate çalışıyor. Boş sayfa veya seenOrderNos tekrar = stop.
+  await navigateToOrdersPage(ctx);
+  const { page } = ctx;
+
+  const results: RawOrderSummary[] = [];
+  const seenOrderNos = new Set<string>();
+  let pageIndex = 1;
+
+  while (pageIndex <= ORDER_LIST_MAX_PAGES) {
+    const pageLabel = `Sayfa ${pageIndex}`;
+    const pageRows = await parseCurrentOrdersPage(ctx, pageLabel);
+
+    let addedThisPage = 0;
+    for (const row of pageRows) {
+      if (seenOrderNos.has(row.orderNo)) continue;
+      seenOrderNos.add(row.orderNo);
+      results.push(row);
+      addedThisPage++;
+      if (limit && limit > 0 && results.length >= limit) {
+        ctx.pagesVisited = pageIndex;
+        vlog(ctx, `Limit ${limit} ulaşıldı; sayfa ${pageIndex} ortasında durduruluyor`);
+        return results;
+      }
+    }
+
+    if (pageIndex === 1 && pageRows.length === 0) {
+      throw new ScrapeError({
+        mode: "unexpected-dom",
+        step: "orders-row-selector",
+      });
+    }
+
+    if (addedThisPage === 0) {
+      vlog(ctx, `Sayfa ${pageIndex}: yeni satır yok, pagination durduruluyor`);
+      break;
+    }
+
+    pageIndex++;
+    const nextUrl = SITE_BASE_URL + ORDER_LIST_PAGE_URL_TEMPLATE.replace("{page}", String(pageIndex));
+    try {
+      const resp = await page.goto(nextUrl, { waitUntil: "domcontentloaded", timeout: TIMEOUTS.NAVIGATION_MS });
+      if (!resp || resp.status() >= 400) {
+        vlog(ctx, `Sayfa ${pageIndex}: status ${resp?.status() ?? "?"}, durduruluyor`);
+        pageIndex--;
+        break;
+      }
+      await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
+    } catch (e) {
+      vlog(ctx, `Sayfa ${pageIndex}: navigate fail ${(e as Error).message}, durduruluyor`);
+      pageIndex--;
+      break;
     }
   }
 
   if (results.length === 0) {
     throw new ScrapeError({
-      mode: "unexpected-dom",
-      step: "orders-parse-all-failed",
-      details: `${rows.length} satır, hiçbiri parse edilemedi`,
+      mode: "empty-history",
+      step: "no-rows",
     });
   }
 
-  vlog(ctx, `${results.length} sipariş başlığı parse edildi`);
+  ctx.pagesVisited = pageIndex;
+  vlog(ctx, `Pagination: ${pageIndex} sayfa, ${results.length} sipariş`);
   return results;
 }
 

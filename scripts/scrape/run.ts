@@ -187,7 +187,9 @@ async function runScrape(args: Args): Promise<void> {
     console.log("[scrape] Sipariş listesi okunuyor...");
     const orders = await adapter.listOrders(ctx, args.limit);
     summary.orders_total = orders.length;
-    console.log(`[scrape] ${orders.length} sipariş bulundu`);
+    if (ctx.pagesVisited !== undefined) summary.pages_visited = ctx.pagesVisited;
+    const pagesNote = ctx.pagesVisited !== undefined ? ` (${ctx.pagesVisited} sayfa)` : "";
+    console.log(`[scrape] ${orders.length} sipariş bulundu${pagesNote}`);
 
     // 3) Sipariş detayları + DB yazma
     console.log("[scrape] Sipariş detayları işleniyor...");

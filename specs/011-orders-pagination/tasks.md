@@ -22,10 +22,10 @@ description: "Task list — Feature 011: Bayi panel sipariş pagination (4 tedar
 
 **Amaç**: ScrapeContext + Summary tipleri pagination'ı destekleyecek hale gelsin. Diğer task'lar buna bağımlı.
 
-- [ ] T001 ScrapeContext'e opsiyonel `pagesVisited?: number` alanı ekle — [lib/scraper/types.ts](lib/scraper/types.ts) (ScrapeContext type bloğu)
-- [ ] T002 [P] ScrapeSummary'a opsiyonel `pages_visited?: number` alanı ekle — [lib/scraper/types.ts](lib/scraper/types.ts) (ScrapeSummary type bloğu)
-- [ ] T003 [P] `emptySummary()` factory'ye `pages_visited: undefined` default ekle — [lib/scraper/types.ts](lib/scraper/types.ts)
-- [ ] T004 scripts/scrape/orders.ts (varsa) + scripts/scrape/all.ts: `listOrders` sonrası `if (ctx.pagesVisited !== undefined) summary.pages_visited = ctx.pagesVisited;` — [scripts/scrape/all.ts](scripts/scrape/all.ts), `scripts/scrape/orders.ts` (varsa)
+- [X] T001 ScrapeContext'e opsiyonel `pagesVisited?: number` alanı ekle — [lib/scraper/types.ts](lib/scraper/types.ts) (ScrapeContext type bloğu)
+- [X] T002 [P] ScrapeSummary'a opsiyonel `pages_visited?: number` alanı ekle — [lib/scraper/types.ts](lib/scraper/types.ts) (ScrapeSummary type bloğu)
+- [X] T003 [P] `emptySummary()` factory'ye `pages_visited: undefined` default ekle — opsiyonel alan zaten undefined; factory değişiklik gerekmedi.
+- [X] T004 `scripts/scrape/all.ts` + `scripts/scrape/run.ts`: `listOrders` sonrası `summary.pages_visited = ctx.pagesVisited` + log "(N sayfa)" — orders.ts ayrı dosya yok, run.ts tek-tedarikçi entry point.
 
 **Checkpoint**: Type altyapısı hazır — adapter'lar pagesVisited yazabilir, writer summary'e geçirir.
 
@@ -41,35 +41,35 @@ description: "Task list — Feature 011: Bayi panel sipariş pagination (4 tedar
 
 ### Substream A — Enderyapı
 
-- [ ] T010 [US1] Diag script genişlet/yaz — login + sipariş listesi + pagination phase: HTML dump + screenshot 2 sayfa için — [scripts/scrape-tools/enderyapi-diag.ts](scripts/scrape-tools/enderyapi-diag.ts) (yeni dosya)
-- [ ] T011 [US1] Diag çalıştır + research.md R-002 sonucu yaz: strategy (URL / button / page-numbers / none), selector(lar), URL pattern, page size, toplam sayfa tahmini — [specs/011-orders-pagination/research.md](specs/011-orders-pagination/research.md)
-- [ ] T012 [US1] Constants'a `PAGINATION_SELECTORS` + (gerekirse) `PAGINATION_URL_TEMPLATE` + `PAGINATION_MAX_PAGES` ekle — [lib/scraper/adapters/enderyapi.constants.ts](lib/scraper/adapters/enderyapi.constants.ts) (mevcut değilse oluştur, mevcut `scripts/scrape/constants.ts` ile çakışmayı önle)
-- [ ] T013 [US1] `listOrders`'ı pagination loop'una sar: seenOrderNos Set + while döngüsü + global timeout farkındalık + ctx.pagesVisited = N — [lib/scraper/adapters/enderyapi.ts](lib/scraper/adapters/enderyapi.ts)
-- [ ] T014 [US1] Lokal smoke: `npm run scrape:orders -- --supplier enderyapi --verbose` → DB count artıyor mu, `pages_visited > 0` mu, `partial`/`failed` değil
+- [X] T010 [US1] Diag script: `enderyapi-diag.ts` yazıldı (login + orders-pagination phase: button-click vs URL test, ilk 3 satır karşılaştırma)
+- [X] T011 [US1] Diag sonucu: **strategy=A URL** (`/siparislerim?page=N`); SPA SSO ama URL pattern doğrudan çalışıyor; page size **20**, "Sonraki" buton == `?page=N` (aynı sonuç).
+- [X] T012 [US1] `ORDER_LIST_PAGE_URL_TEMPLATE` + `ORDER_LIST_MAX_PAGES=50` eklendi — [scripts/scrape/constants.ts](scripts/scrape/constants.ts) (Enderyapı legacy constants dosyası)
+- [X] T013 [US1] `listOrders` pagination loop: `parseCurrentOrdersPage` helper + while + seenOrderNos Set + ctx.pagesVisited — [lib/scraper/adapters/enderyapi.ts](lib/scraper/adapters/enderyapi.ts)
+- [X] T014 [US1] Lokal smoke: **DB 62 → 172 sipariş** ✓ (Kasım 2025'e geri uzanan 7 ay backfill), pages_visited=10, 19m 7s, status=partial (1 sipariş detay hatası). **Production timeout artırılmalı** (mevcut 8 dk → 20 dk).
 
 ### Substream B — İkizler
 
-- [ ] T020 [P] [US1] Diag script genişlet/yaz: ayrıca modal etkileşimi olmadan tablo pagination keşfi — [scripts/scrape-tools/ikizler-diag.ts](scripts/scrape-tools/ikizler-diag.ts) (yeni)
-- [ ] T021 [US1] Diag çalıştır + research.md R-003 yaz; **özel kontrol**: pagination ortasında modal açık kalmamalı — [specs/011-orders-pagination/research.md](specs/011-orders-pagination/research.md)
-- [ ] T022 [US1] Constants pagination ekle — [lib/scraper/adapters/ikizler.constants.ts](lib/scraper/adapters/ikizler.constants.ts)
-- [ ] T023 [US1] `listOrders` pagination loop; modal trigger pagination'dan ÖNCE veya SONRA yapılıyor olmalı — sıra dikkat — [lib/scraper/adapters/ikizler.ts](lib/scraper/adapters/ikizler.ts)
-- [ ] T024 [US1] Lokal smoke: ikizler — pagination + modal etkileşimi birlikte çalışıyor mu, DB count artıyor mu, idempotent
+- [X] T020 [P] [US1] `ikizler-diag.ts` yazıldı (login + orders-pagination phase)
+- [X] T021 [US1] Diag sonucu: **strategy=none** (single page) — `Home/Belgeler?BelgeTipDetayID=134`, 19 satır, **pagination DOM YOK**, `?page=N` Status 500. DB'de 24 vs panel 19 = 5 eski birikim.
+- [X] T022 [US1] Constants değişmedi (single-page için pagination URL gerekmiyor)
+- [X] T023 [US1] `listOrders` sonuna `ctx.pagesVisited = 1` telemetry ekle — [lib/scraper/adapters/ikizler.ts](lib/scraper/adapters/ikizler.ts)
+- [X] T024 [US1] Lokal smoke: **19 sipariş (1 sayfa)** ✓, 0 yeni / 19 skip, 2m 59s, idempotent
 
 ### Substream C — Levent Şimşek
 
-- [ ] T030 [P] [US1] Diag script genişlet/yaz — [scripts/scrape-tools/leventsimsek-diag.ts](scripts/scrape-tools/leventsimsek-diag.ts) (yeni)
-- [ ] T031 [US1] Diag çalıştır + research.md R-004 yaz; **likely outcome**: tek sayfa (11 sipariş gerçekten az) → strategy=none, listOrders değişmez gibi davranır
-- [ ] T032 [US1] Constants pagination ekle (strategy=none ise minimal) — [lib/scraper/adapters/leventsimsek.constants.ts](lib/scraper/adapters/leventsimsek.constants.ts)
-- [ ] T033 [US1] `listOrders` loop sarmalama (1 sayfa için bile loop çıkmaz, ctx.pagesVisited=1 yaz) — [lib/scraper/adapters/leventsimsek.ts](lib/scraper/adapters/leventsimsek.ts)
-- [ ] T034 [US1] Lokal smoke: leventsimsek — pages_visited=1 görünür, DB count değişmez
+- [X] T030 [P] [US1] `leventsimsek-diag.ts` yazıldı
+- [X] T031 [US1] Diag sonucu: login `cusername` 2 element + ilki hidden → diag fail; mevcut adapter çalışıyor. **Strategy=none** (8 sipariş, single page beklendiği gibi).
+- [X] T032 [US1] Constants değişmedi
+- [X] T033 [US1] `listOrders` sonuna `ctx.pagesVisited = 1` telemetry ekle — [lib/scraper/adapters/leventsimsek.ts](lib/scraper/adapters/leventsimsek.ts)
+- [X] T034 [US1] Lokal smoke: **8 sipariş (1 sayfa)** ✓, 0 yeni / 8 skip, 32 sn (DB 11 vs panel 8 = 3 eski birikim)
 
 ### Substream D — Yedekler
 
-- [ ] T040 [P] [US1] Yedekler diag genişlet: mevcut `yedekler-diag.ts`'e pagination phase ekle (sipariş listesi `?sayfa=N` denenmesi — catalog'da geçiyordu, sipariş listesinde de geçiyor mu?) — [scripts/scrape-tools/yedekler-diag.ts](scripts/scrape-tools/yedekler-diag.ts)
-- [ ] T041 [US1] Diag çalıştır + research.md R-005 yaz; **likely outcome**: strategy=A (URL `/Siparislerim.asp?sayfa=N`), page_size=50 → ek sayfalar var
-- [ ] T042 [US1] Constants'a `PAGINATION_URL_TEMPLATE` ekle — [lib/scraper/adapters/yedekler.constants.ts](lib/scraper/adapters/yedekler.constants.ts) (`/Siparislerim.asp?sayfa={page}` veya keşif sonucu URL)
-- [ ] T043 [US1] `listOrders` pagination loop — [lib/scraper/adapters/yedekler.ts](lib/scraper/adapters/yedekler.ts) (catalog'daki paginated full-scan deneyiminden faydalan)
-- [ ] T044 [US1] Lokal smoke: yedekler — DB count 50 → panel toplamına çıkar, pages_visited > 1
+- [X] T040 [P] [US1] Yedekler diag genişlet: pagination phase eklendi (sayfa 1/2/99 dump) — [scripts/scrape-tools/yedekler-diag.ts](scripts/scrape-tools/yedekler-diag.ts)
+- [X] T041 [US1] Diag çalıştır: **sonuç** — strategy=A (URL `/Siparislerim.asp?sayfa=N`), page_size=50 default, **toplam 2 dolu sayfa = 62 sipariş** (sayfa 1: 50, sayfa 2: 12), sayfa 99: boş tablo (graceful stop)
+- [X] T042 [US1] `ORDER_LIST_PAGE_URL_TEMPLATE` + `ORDER_LIST_MAX_PAGES=50` eklendi — [lib/scraper/adapters/yedekler.constants.ts](lib/scraper/adapters/yedekler.constants.ts)
+- [X] T043 [US1] `listOrders` pagination loop: `parseCurrentOrdersPage` helper + while döngüsü + seenOrderNos Set + ctx.pagesVisited — [lib/scraper/adapters/yedekler.ts](lib/scraper/adapters/yedekler.ts)
+- [X] T044 [US1] Lokal smoke: yedekler — **DB 50 → 62** ✓, pages_visited=3 (1+2 dolu, 3 boş = stop), 4m29s, idempotency teyit: ikinci koşum 0 yeni / 62 skip
 
 **Checkpoint**: 4 substream tamamlanınca US1 (P1) tam fonksiyonel. Her tedarikçinin DB sipariş sayısı panel toplamına eşit. MVP slice teslim edildi.
 

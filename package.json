@@ -13,7 +13,10 @@
     "scrape:catalog": "tsx scripts/scrape/catalog.ts",
     "scrape:all": "tsx scripts/scrape/all.ts",
     "scrape:enderyapi": "tsx scripts/scrape/enderyapi.ts",
-    "diag:yedekler": "tsx scripts/scrape-tools/yedekler-diag.ts"
+    "diag:yedekler": "tsx scripts/scrape-tools/yedekler-diag.ts",
+    "diag:enderyapi": "tsx scripts/scrape-tools/enderyapi-diag.ts",
+    "diag:ikizler": "tsx scripts/scrape-tools/ikizler-diag.ts",
+    "diag:leventsimsek": "tsx scripts/scrape-tools/leventsimsek-diag.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

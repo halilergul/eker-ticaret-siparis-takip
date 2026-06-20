@@ -66,6 +66,14 @@ export const ORDER_LIST_SELECTORS = {
   ],
 } as const;
 
+// Sipariş listesi pagination (Enderyapı b2b) — 011 diag keşif (2026-06-20):
+//   /siparislerim sayfası SPA, default 20 satır.
+//   "Sonraki" button JS-driven ama URL'i ?page=N'e çeviriyor.
+//   ?page=N direkt navigate çalışıyor (Status 200, farklı satırlar).
+// Strategy: URL-based pagination, page size = 20.
+export const ORDER_LIST_PAGE_URL_TEMPLATE = "/siparislerim?page={page}";
+export const ORDER_LIST_MAX_PAGES = 50; // safety upper bound
+
 // Ürün detay sayfası fiyat selector adayları
 export const PRODUCT_DETAIL_SELECTORS = {
   PRICE_ELEMENTS: [

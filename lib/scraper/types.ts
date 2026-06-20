@@ -10,6 +10,9 @@ export type ScrapeContext = {
   verbose: boolean;
   debugDir: string;
   pushError(step: string, mode: FailureMode, detail: string): void;
+  /** Adapter `listOrders` döngü bitiminde gezdiği toplam sayfa sayısını yazar
+   *  (011 pagination). Single-page durumda 1; pagination yoksa undefined. */
+  pagesVisited?: number;
 };
 
 export type RawOrderSummary = {
@@ -102,6 +105,8 @@ export const scrapeSummarySchema = z.object({
   products_observed: z.number().int().nonnegative(),
   snapshots_added: z.number().int().nonnegative(),
   snapshots_skipped: z.number().int().nonnegative().optional(),
+  /** 011 — adapter `listOrders` döngü bitiminde gezdiği sayfa sayısı (single-page=1). */
+  pages_visited: z.number().int().positive().optional(),
   errors: z.array(
     z.object({
       step: z.string(),

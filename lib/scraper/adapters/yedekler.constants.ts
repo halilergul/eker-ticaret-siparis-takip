@@ -165,6 +165,14 @@ export const CATALOG_PAGE_URL_TEMPLATES = [
 // Catalog tarama limit — Yedekler dump'ında 104 sayfa görüldü; safety margin ile 110.
 export const CATALOG_MAX_PAGES = 110;
 
+// Sipariş listesi pagination — 011 diag keşif (2026-06-20):
+//   /Siparislerim.asp?sayfa=N pattern çalışıyor (Status 200).
+//   Sayfa 1 (parametresiz): 50 satır default. Sayfa 2: 12 satır → toplam 62 sipariş.
+//   Out-of-range (?sayfa=99) boş tablo döner (graceful stop sinyali).
+// Strategy: URL-based pagination (research.md R-005, strateji A).
+export const ORDER_LIST_PAGE_URL_TEMPLATE = "/Siparislerim.asp?sayfa={page}";
+export const ORDER_LIST_MAX_PAGES = 50; // safety upper bound
+
 // Görsel CDN — adm.yedekler.com.tr Uploads klasörü (next.config.ts whitelist'inde).
 export const IMAGE_CDN_HOST = "adm.yedekler.com.tr";
 
