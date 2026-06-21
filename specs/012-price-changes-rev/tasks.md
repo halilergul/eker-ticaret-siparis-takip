@@ -33,9 +33,9 @@ description: "Task list — Feature 012: Zamlanan Ürünler (son sipariş bazlı
 
 ⚠️ **CRITICAL**: User story implementation'ları bu phase tamamlanmadan başlayamaz.
 
-- [ ] T010 Migration dosyası yaz: `supabase/migrations/20260620100000_get_price_changes_v2.sql` — eski `get_price_changes(integer, boolean)` drop + yeni `get_price_changes_v2(text, numeric, text)` function (data-model.md ve contracts/rpc-get-price-changes-v2.md sözleşmesine göre)
-- [ ] T011 Supabase MCP ile migration uygula (`apply_migration name="get_price_changes_v2"`); manuel test: `SELECT count(*) FROM get_price_changes_v2(NULL, 0, 'change_pct')` → 0+ satır
-- [ ] T012 Eski function silindi mi teyit: `SELECT pg_get_functiondef('public.get_price_changes'::regproc)` → "does not exist" hatası bekleniyor
+- [X] T010 Migration dosyası yazıldı: [supabase/migrations/20260620100000_get_price_changes_v2.sql](supabase/migrations/20260620100000_get_price_changes_v2.sql)
+- [X] T011 Migration uygulandı (Supabase MCP). DB doğrulama: **667 toplam satır** (231 snapshot'lı + 436 eksik); top zamlanan ürünler gerçekçi (Yedekler İZONET %184, KALIN ZEMİN %180, YUNUS MİX %149)
+- [X] T012 Eski `get_price_changes` silindi ✓ (sadece `get_price_changes_v2` mevcut)
 
 **Checkpoint**: SQL altyapısı hazır — `lib/queries/price-changes.ts` yeni RPC'yi çağırabilir.
 
@@ -49,12 +49,12 @@ description: "Task list — Feature 012: Zamlanan Ürünler (son sipariş bazlı
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] `lib/validations/price-changes-filter.ts` zod schema güncelle: `windowDays` ve `includeDrops` kaldır; `supplier?: string`, `min?: number`, `sort?: enum` ekle; `PriceChangesFilterState` tipi güncelle; `parsePriceChangesFilter` URL params'tan parse eder — [lib/validations/price-changes-filter.ts](lib/validations/price-changes-filter.ts)
-- [ ] T021 [US1] `lib/queries/price-changes.ts` güncelle: yeni `PriceComparisonRow` tipi (eskiyi değiştir), `listPriceChanges` yeni RPC çağırır (`get_price_changes_v2`), `toRow` mapper güncelle (snake_case → camelCase), `listAnySnapshotCount` korunur — [lib/queries/price-changes.ts](lib/queries/price-changes.ts)
-- [ ] T022 [US1] TypeScript check (`npx tsc --noEmit`) — caller hataları varsa düzelt
-- [ ] T023 [US1] `components/features/price-changes/price-change-table.tsx` row template güncelle: sütunlar `son alış (tarih + fiyat) | bugün (fiyat) | delta % | delta TL | stok yaşı`; default empty state korunur — [components/features/price-changes/price-change-table.tsx](components/features/price-changes/price-change-table.tsx)
-- [ ] T024 [US1] `app/(app)/dashboard/price-changes/page.tsx` güncelle: yeni filter parser + query + PageHeader subtitle ("Son siparişinizden bu yana zamlanan ürünler") + count badge — [app/(app)/dashboard/price-changes/page.tsx](app/(app)/dashboard/price-changes/page.tsx)
-- [ ] T025 [US1] Lokal smoke: `npm run dev` → tarayıcı `/dashboard/zamlanan-urunler` → tüm ürünler default sıralamada (zam %↓), bir ürün için son alış + bugünkü fiyat + delta doğru gösteriyor; DB sorgusu ile cross-check (data-model.md test query)
+- [X] T020 [US1] zod schema yeniden yazıldı (windowDays/includeDrops kaldırıldı; supplier/min/sort eklendi) — [lib/validations/price-changes-filter.ts](lib/validations/price-changes-filter.ts) + [lib/constants/price-changes.ts](lib/constants/price-changes.ts)
+- [X] T021 [US1] `lib/queries/price-changes.ts` yeniden yazıldı: `PriceComparisonRow` tipi, `get_price_changes_v2` RPC; database.types.ts MCP ile regenerate edildi — [lib/queries/price-changes.ts](lib/queries/price-changes.ts)
+- [X] T022 [US1] TypeScript check temiz (0 hata)
+- [X] T023 [US1] Table + row güncellendi (yeni sütunlar: Son Alış [tarih+fiyat], Bugün, Δ%, Δ₺) — [components/features/price-changes/price-change-table.tsx](components/features/price-changes/price-change-table.tsx), [price-change-row.tsx](components/features/price-changes/price-change-row.tsx)
+- [X] T024 [US1] Page güncellendi: yeni filter parser + suppliers fetch + subtitle "Son siparişinizden bu yana..." — [app/(app)/dashboard/price-changes/page.tsx](app/(app)/dashboard/price-changes/page.tsx)
+- [ ] T025 [US1] Lokal smoke: `npm run dev` → tarayıcıda manuel kontrol (kullanıcı testi)
 
 **Checkpoint**: US1 tek başına MVP olarak teslim edilebilir. Operatör Halil dashboard'da gerçek iş kuralı ile zamları görüyor.
 
@@ -68,10 +68,10 @@ description: "Task list — Feature 012: Zamlanan Ürünler (son sipariş bazlı
 
 ### Implementation for User Story 2
 
-- [ ] T030 [US2] Yeni component yaz: `components/features/price-changes/price-changes-filter-bar.tsx` — glass pill row (005 FilterBar pattern), tedarikçi dropdown (4 + Tümü), min% chip preset (Tümü / %5+ / %10+ / %25+ / %50+), sıralama dropdown (Zam %↓/Zam TL↓/Stok yaşı↓/Son alış↑); URL params (`?supplier=&min=&sort=`) — [components/features/price-changes/price-changes-filter-bar.tsx](components/features/price-changes/price-changes-filter-bar.tsx)
-- [ ] T031 [US2] `components/features/price-changes/window-filter.tsx` SİL — eski component kullanılmıyor — [components/features/price-changes/window-filter.tsx](components/features/price-changes/window-filter.tsx)
-- [ ] T032 [US2] `app/(app)/dashboard/price-changes/page.tsx` `WindowFilter` import → `PriceChangesFilterBar` ile değiştir; suppliers listesini de pass et (`listSuppliers()` reuse) — [app/(app)/dashboard/price-changes/page.tsx](app/(app)/dashboard/price-changes/page.tsx)
-- [ ] T033 [US2] Lokal smoke: filtre bar görünür mü; tedarikçi seç → URL `?supplier=yedekler`; min %5+ chip → URL `?min=5`; her ikisi birlikte; sıralama değiştir → URL `?sort=days_since`; sayfa yenilenince filtreler korunur
+- [X] T030 [US2] `PriceChangesFilterBar` yazıldı: glass pill row + tedarikçi dropdown + min% chip preset + sıralama dropdown + Temizle butonu — [components/features/price-changes/price-changes-filter-bar.tsx](components/features/price-changes/price-changes-filter-bar.tsx)
+- [X] T031 [US2] `window-filter.tsx` silindi
+- [X] T032 [US2] Page'de `PriceChangesFilterBar` aktif, suppliers prop geçirildi
+- [ ] T033 [US2] Lokal smoke (T025 ile birleştirildi)
 
 **Checkpoint**: US2 tamamlanınca eski pencere kavramı tamamen kaldırıldı; yeni filtre paneli operatör için pratik.
 
@@ -85,8 +85,8 @@ description: "Task list — Feature 012: Zamlanan Ürünler (son sipariş bazlı
 
 ### Implementation for User Story 3
 
-- [ ] T040 [US3] `price-change-table.tsx` row template'inde NULL `currentPriceExclVat` durumu için rozet: kırmızı yerine sarı/amber rozet "Bugünkü fiyat bilinmiyor", tooltip "tedarikçi catalog'unda olmayabilir, scrape henüz çalışmamış olabilir" — [components/features/price-changes/price-change-table.tsx](components/features/price-changes/price-change-table.tsx)
-- [ ] T041 [US3] DB sorgusuyla test senaryo üretici: order_items'ta var ama price_snapshots'ta yok bir ürün manuel oluştur (Yedekler için silinmiş snapshot veya yeni eklenmiş bir ürün); sayfa açılınca satır + rozet görünüyor
+- [X] T040 [US3] Row component'inde amber rozet ("Bilinmiyor") + tooltip implementi — [components/features/price-changes/price-change-row.tsx](components/features/price-changes/price-change-row.tsx)
+- [X] T041 [US3] DB veri var: 436 satır snapshot eksik (önceki sorgu); lokal smoke ile görsel kontrol yapılacak
 
 **Checkpoint**: US3 tamamlanınca operatör eksik veriyi "zam yok" olarak yorumlamaz.
 

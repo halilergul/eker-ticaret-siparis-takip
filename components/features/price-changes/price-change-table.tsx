@@ -1,37 +1,16 @@
-import type { PriceChangeRow } from "@/lib/queries/price-changes";
+import type { PriceComparisonRow } from "@/lib/queries/price-changes";
 
 import { PriceChangeRowItem } from "./price-change-row";
 import { PriceChangesEmptyState } from "./price-changes-empty-state";
 
-/**
- * Price-changes table per design brief §5.3.
- *
- * Solid white card (number legibility). Sticky header, slate-50 hover rows,
- * tabular nums right-aligned. Trend indicator (colored ▲/▼ + delta %) sits
- * in the Δ% column per §4.9.
- */
-
 type Props = {
-  rows: PriceChangeRow[];
+  rows: PriceComparisonRow[];
   hasAnySnapshot: boolean;
-  windowDays: number;
-  includeDrops: boolean;
 };
 
-export function PriceChangeTable({
-  rows,
-  hasAnySnapshot,
-  windowDays,
-  includeDrops,
-}: Props) {
+export function PriceChangeTable({ rows, hasAnySnapshot }: Props) {
   if (rows.length === 0) {
-    return (
-      <PriceChangesEmptyState
-        hasAnySnapshot={hasAnySnapshot}
-        windowDays={windowDays}
-        includeDrops={includeDrops}
-      />
-    );
+    return <PriceChangesEmptyState hasAnySnapshot={hasAnySnapshot} />;
   }
 
   return (
@@ -42,11 +21,10 @@ export function PriceChangeTable({
             <th className="t-cap px-5 py-3.5">Ürün Kodu</th>
             <th className="t-cap px-4 py-3.5">Ürün</th>
             <th className="t-cap px-4 py-3.5">Tedarikçi</th>
-            <th className="t-cap px-4 py-3.5 text-right">Eski</th>
-            <th className="t-cap px-4 py-3.5 text-right">Yeni</th>
+            <th className="t-cap px-4 py-3.5 text-right">Son Alış</th>
+            <th className="t-cap px-4 py-3.5 text-right">Bugün</th>
             <th className="t-cap px-4 py-3.5 text-right">Δ %</th>
-            <th className="t-cap px-4 py-3.5 text-right">Δ ₺</th>
-            <th className="t-cap px-5 py-3.5 text-right">Sipariş</th>
+            <th className="t-cap px-5 py-3.5 text-right">Δ ₺</th>
           </tr>
         </thead>
         <tbody>
