@@ -341,22 +341,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_price_changes: {
-        Args: { include_drops?: boolean; window_days?: number }
+      get_price_changes_v2: {
+        Args: {
+          filter_min_change_pct?: number
+          filter_supplier_slug?: string
+          sort_by?: string
+        }
         Returns: {
           brand: string
           change_amount: number
           change_pct: number
-          last_order_at: string
-          last_order_id: string
+          current_price_captured_at: string
+          current_price_excl_vat: number
+          days_since_last_order: number
           last_order_no: string
-          new_observed_at: string
-          new_price: number
-          old_observed_at: string
-          old_price: number
+          last_order_price_excl_vat: number
+          last_ordered_at: string
           product_code: string
           product_id: string
           product_name: string
+          supplier_name: string
           supplier_slug: string
         }[]
       }

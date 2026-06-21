@@ -1,18 +1,25 @@
 import { z } from "zod";
 import {
-  DEFAULT_DAYS_WINDOW,
-  MAX_DAYS_WINDOW,
-  MIN_DAYS_WINDOW,
+  DEFAULT_MIN_CHANGE_PCT,
+  DEFAULT_SORT,
+  SORT_OPTIONS,
+  type SortOption,
 } from "@/lib/constants/price-changes";
 
 export type PriceChangesFilterState = {
-  windowDays: number;
-  includeDrops: boolean;
+  supplierSlug?: string;
+  minChangePct: number; // 0..1; 0 = tümü
+  sortBy: SortOption;
 };
 
 export const priceChangesFilterSchema = z.object({
-  days: z.coerce.number().int().min(MIN_DAYS_WINDOW).max(MAX_DAYS_WINDOW).optional(),
-  showDrops: z.enum(["0", "1"]).optional(),
+  supplier: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
+  // Min zam % URL'de tamsayı (örn. ?min=5 → %5+ = 0.05); zod 0..100 clamp
+  min: z.coerce.number().min(0).max(100).optional(),
+  sort: z.enum(SORT_OPTIONS).optional(),
 });
 
 type SearchParamsRecord = Record<string, string | string[] | undefined>;
@@ -26,14 +33,20 @@ export function parsePriceChangesFilter(
       : searchParams;
 
   const result = priceChangesFilterSchema.safeParse({
-    days: typeof obj.days === "string" ? obj.days : undefined,
-    showDrops: typeof obj.showDrops === "string" ? obj.showDrops : undefined,
+    supplier: typeof obj.supplier === "string" ? obj.supplier : undefined,
+    min: typeof obj.min === "string" ? obj.min : undefined,
+    sort: typeof obj.sort === "string" ? obj.sort : undefined,
   });
   if (!result.success) {
-    return { windowDays: DEFAULT_DAYS_WINDOW, includeDrops: false };
+    return {
+      minChangePct: DEFAULT_MIN_CHANGE_PCT,
+      sortBy: DEFAULT_SORT,
+    };
   }
+  const minPctInt = result.data.min ?? 0;
   return {
-    windowDays: result.data.days ?? DEFAULT_DAYS_WINDOW,
-    includeDrops: result.data.showDrops === "1",
+    supplierSlug: result.data.supplier,
+    minChangePct: minPctInt / 100, // 5 → 0.05
+    sortBy: result.data.sort ?? DEFAULT_SORT,
   };
 }

@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: yok — 011 tamamlandı; sıradakini kullanıcı tetikleyene kadar bekleyişte.
+**Aktif feature**: yok — 012 tamamlandı; sıradakini kullanıcı tetikleyene kadar bekleyişte.
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
@@ -176,6 +176,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - `009-multi-supplier-catalog` — [spec](specs/009-multi-supplier-catalog/spec.md) (İkizler + Levent Şimşek catalog scrape; writePriceSnapshot idempotency + barkod fallback + cron exit 78 hotfix)
 - `010-yedekler-supplier` — [spec](specs/010-yedekler-supplier/spec.md) (4. tedarikçi Yedekler İnşaat: 3-alanlı login, sipariş + catalog scrape, ~157 ürün; dashboard pagination 20/sayfa)
 - `011-orders-pagination` — [spec](specs/011-orders-pagination/spec.md) (4 tedarikçi listOrders pagination: Enderyapı 62→172 + Yedekler 50→62 backfill; İkizler/Levent single-page; pages_visited telemetry; workflow timeout 8→30 dk)
+- `012-price-changes-rev` — [spec](specs/012-price-changes-rev/spec.md) (zamlanan ürünler: pencere kaldırıldı; son sipariş vs bugünkü tedarikçi fiyatı karşılaştırma; tedarikçi + min% chip filtre; snapshot eksik "Bilinmiyor" rozeti)
 
 **Prod URL**: https://siparis.ekerticaret.com.tr (alias: https://eker-ticaret-siparis-takip.vercel.app)
 

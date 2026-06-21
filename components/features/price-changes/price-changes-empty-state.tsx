@@ -1,32 +1,20 @@
 import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * Empty state per design brief §4.3 for the price-changes table.
- *
- * Two variants:
- * - hasAnySnapshot=false: hardware shop has never run a catalog scrape yet.
- *   Guide them to trigger one from the dashboard.
- * - hasAnySnapshot=true but window has no changes: encourage widening the
- *   window or waiting for the next scheduled scrape.
+ * 012: Pencere kavramı kaldırıldı; empty state daha basit.
  */
 
 type Props = {
   hasAnySnapshot: boolean;
-  windowDays: number;
-  includeDrops: boolean;
 };
 
-export function PriceChangesEmptyState({
-  hasAnySnapshot,
-  windowDays,
-  includeDrops,
-}: Props) {
+export function PriceChangesEmptyState({ hasAnySnapshot }: Props) {
   if (!hasAnySnapshot) {
     return (
       <EmptyState
         icon="tool"
         title="Henüz fiyat verisi yok"
-        body="İlk catalog scrape'i Ana Sayfa'daki tedarikçi kartlarından tetikleyebilirsin. Snapshot'lar geldikçe fiyat değişiklikleri burada görünür."
+        body="İlk catalog scrape'i Ana Sayfa'daki tedarikçi kartlarından tetikleyebilirsin. Snapshot'lar geldikçe zamlanan ürünler burada görünür."
         cta={{ label: "Ana Sayfa'ya git" }}
       />
     );
@@ -35,8 +23,8 @@ export function PriceChangesEmptyState({
   return (
     <EmptyState
       icon="clock"
-      title={`Son ${windowDays} gün içinde ${includeDrops ? "fiyat değişikliği" : "zam"} yok`}
-      body="Daha geniş bir pencere dene (örn. 30 veya 90 gün) ya da yeni bir scrape çalıştır. Karşılaştırma için her ürünün pencere içinde en az 2 farklı snapshot'ı olmalı."
+      title="Zamlanan ürün yok"
+      body="Filtreleri değiştirmeyi deneyebilirsin. Hiçbir ürünün son siparişten bu yana zam görmediği anlamına da gelebilir."
     />
   );
 }
