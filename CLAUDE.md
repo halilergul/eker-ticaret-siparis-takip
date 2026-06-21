@@ -162,7 +162,7 @@ Stack detayları `.docs/CONSTITUTION.md` içinde tanımlanmıştır. Her agent k
 - Constitution'da onaylanmış kararları agent kendi başına değiştirmez
 
 <!-- SPECKIT START -->
-**Aktif feature**: yok — 011 tamamlandı; sıradakini kullanıcı tetikleyene kadar bekleyişte.
+**Aktif feature**: `012-price-changes-rev` — zamlanan ürünler: son sipariş bazlı birikimli zam takibi (pencere filtresi kaldırılıyor). Plan: [specs/012-price-changes-rev/plan.md](specs/012-price-changes-rev/plan.md)
 
 **Tamamlanan feature'lar** (push edildi, prod'da):
 - `001-auth-dashboard` — [spec](specs/001-auth-dashboard/spec.md)
