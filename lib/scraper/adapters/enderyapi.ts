@@ -28,6 +28,7 @@ import { parseTrPrice } from "@/scripts/scrape/price-parse";
 import { ScrapeError, type FailureMode } from "../errors";
 import type {
   Adapter,
+  CatalogScrapeOptions,
   CatalogScrapeResult,
   CatalogScrapeTarget,
   RawOrderDetail,
@@ -877,11 +878,18 @@ async function navigateBySearch(
 async function scrapeCatalog(
   ctx: ScrapeContext,
   targets: CatalogScrapeTarget[],
+  opts?: CatalogScrapeOptions,
 ): Promise<CatalogScrapeResult[]> {
   const results: CatalogScrapeResult[] = [];
+  const total = targets.length;
+  let idx = 0;
+  let stopRequested = false;
 
   for (const target of targets) {
+    if (stopRequested) break;
     const code = target.productCode;
+    idx++;
+    const before = results.length;
     try {
       let resolvedUrl: string | null = null;
 
@@ -1036,6 +1044,16 @@ async function scrapeCatalog(
         mode: "catalog-parse-failed",
         message,
       });
+    } finally {
+      // Incremental yazma: `continue` da finally'i çalıştırır. Callback throw
+      // ederse stopRequested ile sonraki iterasyonda break.
+      if (opts?.onResult && results.length > before) {
+        try {
+          await opts.onResult(results[results.length - 1]!, idx, total);
+        } catch {
+          stopRequested = true;
+        }
+      }
     }
   }
 

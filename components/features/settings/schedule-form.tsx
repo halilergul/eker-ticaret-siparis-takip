@@ -114,7 +114,7 @@ export function ScheduleForm({
             Belirlenen saatte GitHub Actions tetiklenir.
           </p>
         </div>
-        <label htmlFor={switchId} className="inline-flex cursor-pointer items-center">
+        <label htmlFor={switchId} className="relative inline-flex h-6 w-11 cursor-pointer items-center">
           <input
             id={switchId}
             type="checkbox"
@@ -123,10 +123,12 @@ export function ScheduleForm({
           />
           <span
             aria-hidden="true"
-            className="relative inline-block h-6 w-11 rounded-full bg-slate-200 transition-colors peer-checked:bg-slate-900 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-900/30 peer-focus-visible:ring-offset-2"
-          >
-            <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5" />
-          </span>
+            className="absolute inset-0 rounded-full bg-slate-200 transition-colors peer-checked:bg-slate-900 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-900/30 peer-focus-visible:ring-offset-2"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-5"
+          />
         </label>
       </div>
 

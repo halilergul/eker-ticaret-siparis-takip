@@ -20,6 +20,7 @@ import { parseTrPrice } from "@/scripts/scrape/price-parse";
 import { ScrapeError } from "../errors";
 import type {
   Adapter,
+  CatalogScrapeOptions,
   CatalogScrapeResult,
   CatalogScrapeTarget,
   RawOrderDetail,
@@ -817,6 +818,7 @@ async function extractDetailPrices(
 async function scrapeCatalog(
   ctx: ScrapeContext,
   targets: CatalogScrapeTarget[],
+  opts?: CatalogScrapeOptions,
 ): Promise<CatalogScrapeResult[]> {
   const results: CatalogScrapeResult[] = [];
 
@@ -830,9 +832,15 @@ async function scrapeCatalog(
       `catalog: LEVENTSIMSEK_CATALOG_LIMIT=${limit} aktif → ${workTargets.length}/${targets.length} ürün`,
     );
   }
+  const total = workTargets.length;
+  let idx = 0;
+  let stopRequested = false;
 
   for (const target of workTargets) {
+    if (stopRequested) break;
     const code = target.productCode;
+    idx++;
+    const before = results.length;
     try {
       let detailUrl: string | null = null;
 
@@ -911,6 +919,14 @@ async function scrapeCatalog(
         mode: "catalog-parse-failed",
         message,
       });
+    } finally {
+      if (opts?.onResult && results.length > before) {
+        try {
+          await opts.onResult(results[results.length - 1]!, idx, total);
+        } catch {
+          stopRequested = true;
+        }
+      }
     }
   }
 

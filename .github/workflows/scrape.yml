@@ -29,15 +29,16 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
     env:
       SUPPLIER: ${{ github.event.inputs.supplier || 'enderyapi' }}
       TRIGGER_TYPE: ${{ github.event.inputs.trigger_type || (github.event_name == 'schedule' && 'auto' || 'manual') }}
       # 011 production smoke: Enderyapı pagination ile 172 sipariş + 489 ürün catalog
-      # → toplam runner süresi 21-25 dk gözlendi. Catalog detail parse + 489 ürün
-      # ürün başı ~2sn ana payın çoğunu yapıyor. Sonraki koşumlar orders aşaması
-      # idempotent skip ile hızlı, catalog aynı süre.
-      TIMEOUT_OVERRIDE_MS: '1800000'  # 30 dk (runner timeout-minutes 35 ile uyumlu)
+      # → toplam runner süresi 21-25 dk gözlendi. 2026-06-22: 490 ürün catalog
+      # 30dk timeout'u aştı (0 snapshot, scrapeCatalog buffer'da kaldı). 50dk'ya
+      # uzatıldı + scrapeCatalog incremental yazma (onResult callback) eklendi:
+      # timeout fırlarsa o ana kadar yazılanlar kalır.
+      TIMEOUT_OVERRIDE_MS: '3000000'  # 50 dk (runner timeout-minutes 55 ile uyumlu)
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       ENDERYAPI_USERNAME: ${{ secrets.ENDERYAPI_USERNAME }}

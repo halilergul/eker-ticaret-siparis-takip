@@ -41,6 +41,7 @@ import {
 import type { Page } from "playwright";
 
 import type {
+  CatalogScrapeOptions,
   CatalogScrapeResult,
   CatalogScrapeTarget,
 } from "../types";
@@ -840,6 +841,7 @@ async function openPriceModalAndExtract(
 async function scrapeCatalog(
   ctx: ScrapeContext,
   targets: CatalogScrapeTarget[],
+  opts?: CatalogScrapeOptions,
 ): Promise<CatalogScrapeResult[]> {
   const results: CatalogScrapeResult[] = [];
 
@@ -851,9 +853,15 @@ async function scrapeCatalog(
   if (limit > 0) {
     vlog(ctx, `catalog: IKIZLER_CATALOG_LIMIT=${limit} aktif → ${workTargets.length}/${targets.length} ürün`);
   }
+  const total = workTargets.length;
+  let idx = 0;
+  let stopRequested = false;
 
   for (const target of workTargets) {
+    if (stopRequested) break;
     const code = target.productCode;
+    idx++;
+    const before = results.length;
     try {
       let detailUrl: string | null = null;
 
@@ -944,6 +952,14 @@ async function scrapeCatalog(
         mode: "catalog-parse-failed",
         message,
       });
+    } finally {
+      if (opts?.onResult && results.length > before) {
+        try {
+          await opts.onResult(results[results.length - 1]!, idx, total);
+        } catch {
+          stopRequested = true;
+        }
+      }
     }
   }
 

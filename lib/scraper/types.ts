@@ -93,8 +93,18 @@ export interface Adapter {
   scrapeCatalog?(
     ctx: ScrapeContext,
     targets: CatalogScrapeTarget[],
+    opts?: CatalogScrapeOptions,
   ): Promise<CatalogScrapeResult[]>;
 }
+
+/**
+ * `onResult` çağrılırsa her ürün için anında yazma yapılır. Timeout fırlarsa
+ * o ana kadar yazılanlar DB'de kalır. Adapter callback'in throw etmesine
+ * (timeout sinyali) saygı duyup loop'tan çıkmalı.
+ */
+export type CatalogScrapeOptions = {
+  onResult?: (result: CatalogScrapeResult, index: number, total: number) => Promise<void>;
+};
 
 export const scrapeSummarySchema = z.object({
   orders_total: z.number().int().nonnegative(),
