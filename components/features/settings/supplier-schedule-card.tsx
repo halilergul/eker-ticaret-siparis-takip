@@ -43,7 +43,7 @@ const STATUS_INTENT: Record<
 };
 
 function formatNextRun(date: Date | null): string {
-  if (!date) return "Otomatik scrape kapalı.";
+  if (!date) return "Otomatik yenileme kapalı.";
   const formatter = new Intl.DateTimeFormat("tr-TR", {
     day: "2-digit",
     month: "2-digit",
@@ -52,7 +52,7 @@ function formatNextRun(date: Date | null): string {
     minute: "2-digit",
     timeZone: "Europe/Istanbul",
   });
-  return `Sonraki otomatik scrape: ${formatter.format(date)} (Türkiye saati)`;
+  return `Sonraki otomatik yenileme: ${formatter.format(date)} (Türkiye saati)`;
 }
 
 export async function SupplierScheduleCard({ schedule }: Props) {
@@ -109,7 +109,7 @@ export async function SupplierScheduleCard({ schedule }: Props) {
         <div className="mb-4">
           <Notice
             intent="info"
-            title="Otomatik scrape kapalı"
+            title="Otomatik yenileme kapalı"
             body="Manuel tetikleme gerekiyor. Aşağıdan açıp günlük saati ayarlayabilirsin."
           />
         </div>
@@ -117,7 +117,7 @@ export async function SupplierScheduleCard({ schedule }: Props) {
 
       {/* Schedule form section */}
       <section className="mb-5 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-        <h3 className="t-h3 mb-3 text-slate-900">Otomatik scrape ayarları</h3>
+        <h3 className="t-h3 mb-3 text-slate-900">Otomatik yenileme ayarları</h3>
         <ScheduleForm
           supplierSlug={schedule.supplierSlug}
           initialEnabled={schedule.enabled}

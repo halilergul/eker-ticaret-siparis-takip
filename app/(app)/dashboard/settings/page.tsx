@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     <PageShell>
       <PageHeader
         title="Ayarlar"
-        subtitle="Tedarikçi scrape ayarlarını yönetin ve manuel tetikleme yapın."
+        subtitle="Tedarikçi yenileme ayarlarını yönetin ve manuel tetikleme yapın."
       />
 
       {schedules.length === 0 ? (

@@ -17,7 +17,7 @@ export function ProductOrdersList({ orders }: Props) {
       <EmptyState
         icon="box"
         title="Bu ürün henüz sipariş edilmemiş"
-        body="Sipariş scrape'leri tamamlandıkça bu ürünü içeren siparişler burada listelenir."
+        body="Sipariş yenilemeleri tamamlandıkça bu ürünü içeren siparişler burada listelenir."
       />
     );
   }

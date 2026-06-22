@@ -20,10 +20,11 @@ type Props = {
 };
 
 const SORT_LABELS: Record<SortOption, string> = {
+  last_ordered_desc: "En yeni sipariş ↓",
+  last_ordered_asc: "En eski sipariş ↑",
   change_pct: "Zam % ↓",
   change_amount: "Zam TL ↓",
   days_since: "Stok yaşı ↓",
-  last_ordered_at: "Son alış ↑",
 };
 
 const MIN_PCT_LABELS: Record<number, string> = {
@@ -48,6 +49,7 @@ export function PriceChangesFilterBar({
     const sp = new URLSearchParams(searchParams.toString());
     if (value) sp.set(key, value);
     else sp.delete(key);
+    sp.delete("page"); // filtre değişince ilk sayfaya dön
     const qs = sp.toString();
     startTransition(() => {
       router.push(qs ? `${ROUTES.PRICE_CHANGES}?${qs}` : ROUTES.PRICE_CHANGES);
@@ -67,7 +69,7 @@ export function PriceChangesFilterBar({
 
   const sortOptions = SORT_OPTIONS.map((s) => ({ value: s, label: SORT_LABELS[s] }));
 
-  const hasFilter = Boolean(currentSupplier || currentMinPct > 0 || currentSort !== "change_pct");
+  const hasFilter = Boolean(currentSupplier || currentMinPct > 0 || currentSort !== "last_ordered_desc");
 
   return (
     <div className="et-glass flex flex-wrap items-center gap-2.5 rounded-full p-2.5 pl-4">
@@ -108,15 +110,15 @@ export function PriceChangesFilterBar({
         })}
       </div>
 
+      <div className="flex-1" />
+
       <FilterDropdown
         label="Sırala"
         options={sortOptions}
         value={currentSort}
-        onChange={(v) => setParam("sort", v === "change_pct" ? "" : v)}
+        onChange={(v) => setParam("sort", v === "last_ordered_desc" ? "" : v)}
         disabled={isPending}
       />
-
-      <div className="flex-1" />
 
       {hasFilter ? (
         <button

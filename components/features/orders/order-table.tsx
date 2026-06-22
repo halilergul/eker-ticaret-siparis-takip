@@ -24,7 +24,7 @@ export function OrderTable({ orders }: Props) {
       <EmptyState
         icon="box"
         title="Henüz sipariş yok"
-        body="İlk scrape'i başlat — taradığımız tedarikçi portallarından eşleşen siparişler burada listelenecek."
+        body="İlk yenilemeyi başlat — taradığımız tedarikçi portallarından eşleşen siparişler burada listelenecek."
       />
     );
   }
