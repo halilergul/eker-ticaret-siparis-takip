@@ -71,11 +71,12 @@ export function PriceChangesFilterBar({
 
   const sortOptions = SORT_OPTIONS.map((s) => ({ value: s, label: SORT_LABELS[s] }));
 
+  // Switch tek başına Temizle göstermez (kullanıcı switch ile kapatabilir).
+  // Diğer filtreler varsa Temizle hepsini reset eder (switch dahil).
   const hasFilter = Boolean(
     currentSupplier ||
       currentMinPct > 0 ||
-      currentSort !== "last_ordered_desc" ||
-      currentHideUnknown,
+      currentSort !== "last_ordered_desc",
   );
 
   return (
