@@ -24,6 +24,7 @@ import { parseTrPrice } from "@/scripts/scrape/price-parse";
 import { ScrapeError } from "../errors";
 import type {
   Adapter,
+  CatalogScrapeOptions,
   CatalogScrapeResult,
   CatalogScrapeTarget,
   RawOrderDetail,
@@ -461,6 +462,7 @@ async function getProductPrice(
 async function scrapeCatalog(
   ctx: ScrapeContext,
   targets: CatalogScrapeTarget[],
+  _opts?: CatalogScrapeOptions,
 ): Promise<CatalogScrapeResult[]> {
   const { page } = ctx;
   vlog(ctx, `Catalog scrape — ${targets.length} target, paginated full-scan`);

@@ -36,6 +36,7 @@ import {
 } from "@/lib/scraper/run-logger";
 import {
   emptySummary,
+  type CatalogScrapeResult,
   type CatalogScrapeTarget,
   type ScrapeContext,
   type ScrapeSummary,
@@ -270,19 +271,24 @@ async function catalogPhase(
     `[scrape:all] Catalog: ${targets.length} ürün (${cachedCount} cached URL)`,
   );
 
-  const results = await adapter.scrapeCatalog(ctx, targets);
+  // Incremental write: adapter onResult ile çağırırsa, ürün scrape edildikten
+  // hemen sonra DB'ye yazılır. Timeout fırlarsa o ana kadar yazılanlar kalır.
+  // Adapter onResult kullanmayan eski yöntemle dönerse, return sonrası fallback
+  // loop ile yazılır (writtenResults Set'i double-write'ı önler).
+  const writtenResults = new WeakSet<CatalogScrapeResult>();
 
-  for (const r of results) {
+  const writeOne = async (r: CatalogScrapeResult): Promise<void> => {
     if (Date.now() - startTime > GLOBAL_TIMEOUT_MS) {
       const timeoutMin = Math.round(GLOBAL_TIMEOUT_MS / 60_000);
       console.error(`[scrape:all] Global timeout (${timeoutMin}dk) — catalog yarıda kesildi`);
-      break;
+      throw new Error("CATALOG_TIMEOUT");
     }
+    writtenResults.add(r);
 
     if (!r.ok) {
       ctx.pushError(`catalog-${r.productCode}`, r.mode, r.message);
       console.error(`[scrape:all] ✗ ${r.productCode} → ${r.mode}: ${r.message}`);
-      continue;
+      return;
     }
 
     try {
@@ -320,6 +326,19 @@ async function catalogPhase(
       const msg = err instanceof Error ? err.message : String(err);
       ctx.pushError(`catalog-write-${r.productCode}`, "db-write-failed", msg);
       console.error(`[scrape:all] ✗ ${r.productCode} write failed: ${msg}`);
+    }
+  };
+
+  const results = await adapter.scrapeCatalog(ctx, targets, { onResult: writeOne });
+
+  // Fallback: adapter onResult kullanmadıysa (Yedekler page-based) burada yaz.
+  for (const r of results) {
+    if (writtenResults.has(r)) continue;
+    try {
+      await writeOne(r);
+    } catch (err) {
+      if (err instanceof Error && err.message === "CATALOG_TIMEOUT") break;
+      throw err;
     }
   }
 
