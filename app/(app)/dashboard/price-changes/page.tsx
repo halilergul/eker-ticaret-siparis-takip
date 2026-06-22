@@ -48,6 +48,7 @@ export default async function PriceChangesPage({ searchParams }: Props) {
           currentSupplier={filter.supplierSlug}
           currentMinPct={filter.minChangePct}
           currentSort={filter.sortBy}
+          currentHideUnknown={filter.hideUnknown}
         />
       </section>
 
