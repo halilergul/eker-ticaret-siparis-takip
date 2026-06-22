@@ -11,6 +11,7 @@ export type PriceChangesFilterState = {
   minChangePct: number; // 0..1; 0 = tümü
   sortBy: SortOption;
   page: number;
+  hideUnknown: boolean;
 };
 
 export const priceChangesFilterSchema = z.object({
@@ -22,6 +23,7 @@ export const priceChangesFilterSchema = z.object({
   min: z.coerce.number().min(0).max(100).optional(),
   sort: z.enum(SORT_OPTIONS).optional(),
   page: z.coerce.number().int().min(1).max(10000).optional(),
+  unk: z.enum(["1"]).optional(), // ?unk=1 → bilinmeyenleri gizle
 });
 
 type SearchParamsRecord = Record<string, string | string[] | undefined>;
@@ -39,12 +41,14 @@ export function parsePriceChangesFilter(
     min: typeof obj.min === "string" ? obj.min : undefined,
     sort: typeof obj.sort === "string" ? obj.sort : undefined,
     page: typeof obj.page === "string" ? obj.page : undefined,
+    unk: typeof obj.unk === "string" ? obj.unk : undefined,
   });
   if (!result.success) {
     return {
       minChangePct: DEFAULT_MIN_CHANGE_PCT,
       sortBy: DEFAULT_SORT,
       page: 1,
+      hideUnknown: false,
     };
   }
   const minPctInt = result.data.min ?? 0;
@@ -53,5 +57,6 @@ export function parsePriceChangesFilter(
     minChangePct: minPctInt / 100, // 5 → 0.05
     sortBy: result.data.sort ?? DEFAULT_SORT,
     page: result.data.page ?? 1,
+    hideUnknown: result.data.unk === "1",
   };
 }

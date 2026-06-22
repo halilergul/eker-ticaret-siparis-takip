@@ -66,6 +66,10 @@ export async function listPriceChanges(
   });
   if (error) throw new Error(`listPriceChanges failed: ${error.message}`);
   let all = (data ?? []) as unknown as RpcRow[];
+  // Bilinmeyenleri gizle: snapshot eksik (current_price_excl_vat null) satırları çıkar.
+  if (filter.hideUnknown) {
+    all = all.filter((r) => r.current_price_excl_vat !== null);
+  }
   if (filter.sortBy === "last_ordered_desc") {
     all = [...all].sort((a, b) => b.last_ordered_at.localeCompare(a.last_ordered_at));
   } else if (filter.sortBy === "last_ordered_asc") {

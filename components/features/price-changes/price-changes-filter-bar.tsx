@@ -17,6 +17,7 @@ type Props = {
   currentSupplier?: string;
   currentMinPct: number; // 0..1 ratio
   currentSort: SortOption;
+  currentHideUnknown: boolean;
 };
 
 const SORT_LABELS: Record<SortOption, string> = {
@@ -40,12 +41,13 @@ export function PriceChangesFilterBar({
   currentSupplier,
   currentMinPct,
   currentSort,
+  currentHideUnknown,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  function setParam(key: "supplier" | "min" | "sort", value: string) {
+  function setParam(key: "supplier" | "min" | "sort" | "unk", value: string) {
     const sp = new URLSearchParams(searchParams.toString());
     if (value) sp.set(key, value);
     else sp.delete(key);
@@ -69,7 +71,12 @@ export function PriceChangesFilterBar({
 
   const sortOptions = SORT_OPTIONS.map((s) => ({ value: s, label: SORT_LABELS[s] }));
 
-  const hasFilter = Boolean(currentSupplier || currentMinPct > 0 || currentSort !== "last_ordered_desc");
+  const hasFilter = Boolean(
+    currentSupplier ||
+      currentMinPct > 0 ||
+      currentSort !== "last_ordered_desc" ||
+      currentHideUnknown,
+  );
 
   return (
     <div className="et-glass flex flex-wrap items-center gap-2.5 rounded-full p-2.5 pl-4">
@@ -111,6 +118,31 @@ export function PriceChangesFilterBar({
       </div>
 
       <div className="flex-1" />
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={currentHideUnknown}
+        onClick={() => setParam("unk", currentHideUnknown ? "" : "1")}
+        disabled={isPending}
+        className="inline-flex items-center gap-2 et-focus rounded-full px-2 disabled:opacity-60"
+      >
+        <span className="text-[12px] font-medium text-slate-600">Bilinmeyenleri gizle</span>
+        <span className="relative inline-flex h-6 w-11 items-center">
+          <span
+            aria-hidden="true"
+            className={`absolute inset-0 rounded-full transition-colors ${
+              currentHideUnknown ? "bg-slate-900" : "bg-slate-200"
+            }`}
+          />
+          <span
+            aria-hidden="true"
+            className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+              currentHideUnknown ? "translate-x-5" : ""
+            }`}
+          />
+        </span>
+      </button>
 
       <FilterDropdown
         label="Sırala"
