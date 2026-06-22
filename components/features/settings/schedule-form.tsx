@@ -37,7 +37,7 @@ function pad(n: number): string {
 }
 
 function formatNextRun(iso: string | null): string {
-  if (!iso) return "Otomatik scrape kapalı.";
+  if (!iso) return "Otomatik yenileme kapalı.";
   const formatter = new Intl.DateTimeFormat("tr-TR", {
     day: "2-digit",
     month: "2-digit",
@@ -46,7 +46,7 @@ function formatNextRun(iso: string | null): string {
     minute: "2-digit",
     timeZone: "Europe/Istanbul",
   });
-  return `Sonraki otomatik scrape: ${formatter.format(new Date(iso))} (Türkiye saati)`;
+  return `Sonraki otomatik yenileme: ${formatter.format(new Date(iso))} (Türkiye saati)`;
 }
 
 export function ScheduleForm({
@@ -108,7 +108,7 @@ export function ScheduleForm({
             htmlFor={switchId}
             className="block text-sm font-medium text-slate-900"
           >
-            Otomatik scrape
+            Otomatik yenileme
           </label>
           <p className="mt-0.5 text-xs text-slate-500">
             Belirlenen saatte GitHub Actions tetiklenir.

@@ -15,7 +15,7 @@ export function ProductHistoryTable({ snapshots }: Props) {
       <EmptyState
         icon="clock"
         title="Bu ürün için snapshot yok"
-        body="Catalog scrape çalıştığında bu ürünün fiyat geçmişi burada görünecek."
+        body="Fiyat yenilemesi çalıştığında bu ürünün fiyat geçmişi burada görünecek."
       />
     );
   }

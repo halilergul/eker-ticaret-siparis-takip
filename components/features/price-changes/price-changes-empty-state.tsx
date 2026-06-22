@@ -14,7 +14,7 @@ export function PriceChangesEmptyState({ hasAnySnapshot }: Props) {
       <EmptyState
         icon="tool"
         title="Henüz fiyat verisi yok"
-        body="İlk catalog scrape'i Ana Sayfa'daki tedarikçi kartlarından tetikleyebilirsin. Snapshot'lar geldikçe zamlanan ürünler burada görünür."
+        body="İlk fiyat yenilemesini Ana Sayfa'daki tedarikçi kartlarından tetikleyebilirsin. Snapshot'lar geldikçe zamlanan ürünler burada görünür."
         cta={{ label: "Ana Sayfa'ya git" }}
       />
     );

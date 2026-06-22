@@ -37,7 +37,7 @@ export async function RecentRunsList({ supplierId }: Props) {
     return (
       <EmptyState
         icon="clock"
-        title="Henüz scrape koşum geçmişi yok"
+        title="Henüz yenileme geçmişi yok"
         body="Başlatmak için 'Kontrol et'e basın."
       />
     );

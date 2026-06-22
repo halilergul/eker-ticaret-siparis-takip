@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader, PageShell } from "@/components/layout/page-shell";
 import { PriceChangeTable } from "@/components/features/price-changes/price-change-table";
 import { PriceChangesFilterBar } from "@/components/features/price-changes/price-changes-filter-bar";
+import { PriceChangesPagination } from "@/components/features/price-changes/price-changes-pagination";
 import {
   listAnySnapshotCount,
   listPriceChanges,
@@ -22,11 +23,12 @@ type Props = {
 
 export default async function PriceChangesPage({ searchParams }: Props) {
   const filter = parsePriceChangesFilter(await searchParams);
-  const [rows, anyCount, suppliers] = await Promise.all([
+  const [result, anyCount, suppliers] = await Promise.all([
     listPriceChanges(filter),
     listAnySnapshotCount(),
     listSuppliers(),
   ]);
+  const { rows, totalCount, page, totalPages, pageSize } = result;
 
   return (
     <PageShell>
@@ -35,7 +37,7 @@ export default async function PriceChangesPage({ searchParams }: Props) {
         subtitle="Son siparişinizden bu yana zamlanan ürünler — birikimli zam dahil."
         actions={
           <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 tnum">
-            {rows.length} ürün
+            {totalCount} ürün
           </span>
         }
       />
@@ -52,6 +54,15 @@ export default async function PriceChangesPage({ searchParams }: Props) {
       <section>
         <PriceChangeTable rows={rows} hasAnySnapshot={anyCount > 0} />
       </section>
+
+      {totalPages > 1 ? (
+        <PriceChangesPagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+        />
+      ) : null}
     </PageShell>
   );
 }

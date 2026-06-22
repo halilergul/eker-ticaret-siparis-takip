@@ -65,16 +65,16 @@ export default async function DashboardPage({ searchParams }: Props) {
         }
       />
 
-      {/* Top notice: auto-scrape disabled */}
+      {/* Top notice: auto-yenileme disabled */}
       {disabledSchedules.length > 0 ? (
         <div className="mb-6">
           <Notice
             intent="warning"
-            title="Otomatik scrape kapalı"
+            title="Otomatik yenileme kapalı"
             body={
               disabledSchedules.length === schedules.length
-                ? "Tüm tedarikçiler için otomatik scrape kapalı. Veriler eski olabilir; manuel tetikleme gerekiyor."
-                : `${disabledSchedules.join(", ")} için otomatik scrape kapalı. Manuel tetikleme gerekiyor.`
+                ? "Tüm tedarikçiler için otomatik yenileme kapalı. Veriler eski olabilir; manuel tetikleme gerekiyor."
+                : `${disabledSchedules.join(", ")} için otomatik yenileme kapalı. Manuel tetikleme gerekiyor.`
             }
             cta={{ label: "Ayarlara git" }}
             dismissible
