@@ -1,4 +1,3 @@
-import { EmptyState } from "@/components/ui/empty-state";
 import { formatTrDate } from "@/lib/format/date";
 import { listDisabledProducts } from "@/lib/queries/products";
 
@@ -24,7 +23,7 @@ export async function DisabledProductsList({ supplierId }: Props) {
       </div>
       <details className="rounded-xl border border-slate-200 bg-white">
         <summary className="cursor-pointer px-4 py-3 text-[13px] text-slate-700 hover:bg-slate-50 select-none">
-          {products.length} ürün catalog'da bulunamıyor — listeyi göster
+          {products.length} ürün catalog&apos;da bulunamıyor — listeyi göster
         </summary>
         <div className="overflow-hidden border-t border-slate-200">
           <table className="w-full text-sm">
@@ -61,7 +60,7 @@ export async function DisabledProductsList({ supplierId }: Props) {
         </div>
       </details>
       <p className="text-xs text-slate-500">
-        Her scrape'te yine denenir. Bir kez fiyat bulunursa otomatik geri açılır.
+        Her yenilemede yine denenir. Bir kez fiyat bulunursa otomatik geri açılır.
       </p>
     </section>
   );
