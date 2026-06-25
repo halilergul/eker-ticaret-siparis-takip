@@ -452,3 +452,85 @@ export async function writePriceSnapshot(
   return { snapshotId: insert.data.id, inserted: true };
 }
 
+/**
+ * 015: Catalog scrape başarı path'i. Ürün için tüm failure-tracking alanlarını
+ * resetler ve `tracking_enabled=true` yapar (disabled idiyse de auto-enable).
+ * Sadece state değişiyorsa update atar (gereksiz DB yazımını önler).
+ */
+export async function recordCatalogSuccess(productId: string): Promise<void> {
+  const supabase = getServiceClient();
+  const current = await supabase
+    .from("products")
+    .select("tracking_enabled, consecutive_failure_days, last_failure_day, disabled_at")
+    .eq("id", productId)
+    .maybeSingle();
+  if (current.error || !current.data) return;
+  const needsReset =
+    !current.data.tracking_enabled ||
+    current.data.consecutive_failure_days > 0 ||
+    current.data.last_failure_day !== null ||
+    current.data.disabled_at !== null;
+  if (!needsReset) return;
+  await supabase
+    .from("products")
+    .update({
+      tracking_enabled: true,
+      consecutive_failure_days: 0,
+      last_failure_day: null,
+      disabled_at: null,
+    })
+    .eq("id", productId);
+}
+
+/**
+ * 015: Catalog scrape başarısızlık path'i. Aynı gün içindeki çoklu fail counter'ı
+ * artırmaz. 3. ardışık başarısız günde `tracking_enabled=false` yapılır.
+ * Dönüş: { alreadyDisabled } — true ise hata "stale" kategorisinde sayılır
+ * (status badge'i etkilemez).
+ */
+export async function recordCatalogFailure(
+  supplierId: string,
+  productCode: string,
+): Promise<{ alreadyDisabled: boolean; justDisabled: boolean }> {
+  const supabase = getServiceClient();
+  const product = await supabase
+    .from("products")
+    .select("id, tracking_enabled, consecutive_failure_days, last_failure_day")
+    .eq("supplier_id", supplierId)
+    .eq("code", productCode)
+    .maybeSingle();
+  if (product.error || !product.data) {
+    return { alreadyDisabled: false, justDisabled: false };
+  }
+  if (!product.data.tracking_enabled) {
+    // Zaten disabled — counter dokunma (gereksiz).
+    return { alreadyDisabled: true, justDisabled: false };
+  }
+  const today = istanbulToday();
+  if (product.data.last_failure_day === today) {
+    // Aynı günde tekrar fail — counter artmaz.
+    return { alreadyDisabled: false, justDisabled: false };
+  }
+  const newCount = (product.data.consecutive_failure_days ?? 0) + 1;
+  const updates: Database["public"]["Tables"]["products"]["Update"] = {
+    consecutive_failure_days: newCount,
+    last_failure_day: today,
+  };
+  let justDisabled = false;
+  if (newCount >= 3) {
+    updates.tracking_enabled = false;
+    updates.disabled_at = new Date().toISOString();
+    justDisabled = true;
+  }
+  await supabase.from("products").update(updates).eq("id", product.data.id);
+  return { alreadyDisabled: false, justDisabled };
+}
+
+function istanbulToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}

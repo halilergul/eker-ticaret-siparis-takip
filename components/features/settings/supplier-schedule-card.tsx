@@ -1,3 +1,4 @@
+import { DisabledProductsList } from "@/components/features/settings/disabled-products-list";
 import { RecentRunsList } from "@/components/features/settings/recent-runs-list";
 import { ScheduleForm } from "@/components/features/settings/schedule-form";
 import { Notice } from "@/components/ui/notice";
@@ -126,8 +127,11 @@ export async function SupplierScheduleCard({ schedule }: Props) {
         <p className="mt-3 text-xs text-slate-500">{formatNextRun(nextRun)}</p>
       </section>
 
+      {/* Disabled products (015) — render only if any exist */}
+      <DisabledProductsList supplierId={schedule.supplierId} />
+
       {/* Recent runs */}
-      <section className="space-y-2">
+      <section className="mt-5 space-y-2">
         <h3 className="t-h3 text-slate-900">Son koşumlar</h3>
         <RecentRunsList supplierId={schedule.supplierId} />
       </section>

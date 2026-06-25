@@ -101,7 +101,10 @@ function RunSummary({ run }: { run: ScrapeRunRow }) {
   if (orderText) parts.push(orderText);
   if (itemText) parts.push(itemText);
   if (run.snapshotsAdded > 0) parts.push(`${run.snapshotsAdded} snapshot`);
-  if (run.errorsCount > 0) parts.push(`${run.errorsCount} hata`);
+  // 015: etkili hata + devre dışı hata ayrımı
+  if (run.effectiveErrors > 0) parts.push(`${run.effectiveErrors} hata`);
+  if (run.staleErrors > 0) parts.push(`${run.staleErrors} devre dışı`);
+  if (run.newlyDisabled > 0) parts.push(`${run.newlyDisabled} yeni devre dışı`);
   if (parts.length === 0) return <span className="text-slate-400">—</span>;
   return <span className="tnum">{parts.join(" · ")}</span>;
 }

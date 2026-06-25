@@ -22,6 +22,12 @@ export type ScrapeRunRow = {
   itemsSkipped: number;
   snapshotsAdded: number;
   errorsCount: number;
+  /** 015: tracking_enabled=true ürünlerin hata sayısı (status'u etkileyen). */
+  effectiveErrors: number;
+  /** 015: tracking_enabled=false ürünlerin hata sayısı (devre dışı). */
+  staleErrors: number;
+  /** 015: bu run'da yeni disable edilen ürün sayısı. */
+  newlyDisabled: number;
   errorDetails: Array<{
     step: string;
     mode: string;
@@ -36,6 +42,9 @@ type SummaryShape = {
   items_inserted?: number;
   items_skipped?: number;
   snapshots_added?: number;
+  effective_errors?: number;
+  stale_errors?: number;
+  newly_disabled?: number;
   errors?: Array<{
     step?: string;
     mode?: string;
@@ -76,6 +85,9 @@ export async function listRecentRuns(
       itemsSkipped: Number(summary.items_skipped ?? 0),
       snapshotsAdded: Number(summary.snapshots_added ?? 0),
       errorsCount: errors.length,
+      effectiveErrors: Number(summary.effective_errors ?? 0),
+      staleErrors: Number(summary.stale_errors ?? 0),
+      newlyDisabled: Number(summary.newly_disabled ?? 0),
       errorDetails: errors.map((e) => ({
         step: String(e?.step ?? ""),
         mode: String(e?.mode ?? ""),

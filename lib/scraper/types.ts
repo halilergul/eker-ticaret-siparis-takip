@@ -117,6 +117,12 @@ export const scrapeSummarySchema = z.object({
   snapshots_skipped: z.number().int().nonnegative().optional(),
   /** 011 — adapter `listOrders` döngü bitiminde gezdiği sayfa sayısı (single-page=1). */
   pages_visited: z.number().int().positive().optional(),
+  /** 015 — tracking_enabled=true ürünlerin başarısızlık sayısı; status badge bunu kullanır. */
+  effective_errors: z.number().int().nonnegative().optional(),
+  /** 015 — tracking_enabled=false ürünlerin başarısızlık sayısı (bilgi amaçlı; badge'i etkilemez). */
+  stale_errors: z.number().int().nonnegative().optional(),
+  /** 015 — bu run'da yeni disable edilen ürün sayısı. */
+  newly_disabled: z.number().int().nonnegative().optional(),
   errors: z.array(
     z.object({
       step: z.string(),
