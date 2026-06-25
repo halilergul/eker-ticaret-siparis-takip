@@ -124,14 +124,18 @@ export type Database = {
           brand: string | null
           catalog_url: string | null
           code: string
+          consecutive_failure_days: number
           created_at: string
           currency: string
           current_unit_price: number | null
+          disabled_at: string | null
           id: string
           image_url: string | null
+          last_failure_day: string | null
           last_seen_at: string | null
           name: string
           supplier_id: string
+          tracking_enabled: boolean
           updated_at: string
           vat_rate: number
         }
@@ -140,14 +144,18 @@ export type Database = {
           brand?: string | null
           catalog_url?: string | null
           code: string
+          consecutive_failure_days?: number
           created_at?: string
           currency?: string
           current_unit_price?: number | null
+          disabled_at?: string | null
           id?: string
           image_url?: string | null
+          last_failure_day?: string | null
           last_seen_at?: string | null
           name: string
           supplier_id: string
+          tracking_enabled?: boolean
           updated_at?: string
           vat_rate?: number
         }
@@ -156,14 +164,18 @@ export type Database = {
           brand?: string | null
           catalog_url?: string | null
           code?: string
+          consecutive_failure_days?: number
           created_at?: string
           currency?: string
           current_unit_price?: number | null
+          disabled_at?: string | null
           id?: string
           image_url?: string | null
+          last_failure_day?: string | null
           last_seen_at?: string | null
           name?: string
           supplier_id?: string
+          tracking_enabled?: boolean
           updated_at?: string
           vat_rate?: number
         }

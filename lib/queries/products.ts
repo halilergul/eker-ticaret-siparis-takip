@@ -182,3 +182,39 @@ export async function listProductOrders(
     };
   });
 }
+
+export type DisabledProductRow = {
+  id: string;
+  code: string;
+  name: string;
+  brand: string | null;
+  consecutiveFailureDays: number;
+  lastFailureDay: string | null;
+  disabledAt: string | null;
+};
+
+/**
+ * 015: Bir tedarikçi için tracking_enabled=false olan ürünler (3 ardışık gün
+ * catalog scrape başarısız olduktan sonra otomatik devre dışı bırakılan).
+ */
+export async function listDisabledProducts(
+  supplierId: string,
+): Promise<DisabledProductRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, code, name, brand, consecutive_failure_days, last_failure_day, disabled_at")
+    .eq("supplier_id", supplierId)
+    .eq("tracking_enabled", false)
+    .order("disabled_at", { ascending: false, nullsFirst: false });
+  if (error) throw new Error(`listDisabledProducts failed: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    brand: r.brand,
+    consecutiveFailureDays: Number(r.consecutive_failure_days ?? 0),
+    lastFailureDay: r.last_failure_day,
+    disabledAt: r.disabled_at,
+  }));
+}

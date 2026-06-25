@@ -22,6 +22,8 @@ import {
   ensureProduct,
   getServiceClient,
   getSupplierIdBySlug,
+  recordCatalogFailure,
+  recordCatalogSuccess,
   writeOrderHeader,
   writeOrderItems,
   writePriceSnapshot,
@@ -286,7 +288,22 @@ async function catalogPhase(
     writtenResults.add(r);
 
     if (!r.ok) {
+      // 015: failure tracking + auto-disable
+      const failure = await recordCatalogFailure(supplierId, r.productCode).catch(
+        () => ({ alreadyDisabled: false, justDisabled: false }),
+      );
+      if (failure.justDisabled) {
+        summary.newly_disabled = (summary.newly_disabled ?? 0) + 1;
+        console.log(
+          `[scrape:all] ⚠ ${r.productCode}: 3 ardışık gün başarısız → tracking_enabled=false`,
+        );
+      }
       ctx.pushError(`catalog-${r.productCode}`, r.mode, r.message);
+      if (failure.alreadyDisabled) {
+        summary.stale_errors = (summary.stale_errors ?? 0) + 1;
+      } else {
+        summary.effective_errors = (summary.effective_errors ?? 0) + 1;
+      }
       console.error(`[scrape:all] ✗ ${r.productCode} → ${r.mode}: ${r.message}`);
       return;
     }
@@ -302,6 +319,8 @@ async function catalogPhase(
         catalogUrl: r.catalogUrl,
         imageUrl: r.imageUrl,
       });
+      // 015: success → tüm failure counter'larını resetle, auto-enable
+      await recordCatalogSuccess(ensured.productId).catch(() => undefined);
       const snapResult = await writePriceSnapshot({
         productId: ensured.productId,
         unitPriceWithVat: r.unitPriceWithVat,
@@ -325,6 +344,7 @@ async function catalogPhase(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       ctx.pushError(`catalog-write-${r.productCode}`, "db-write-failed", msg);
+      summary.effective_errors = (summary.effective_errors ?? 0) + 1;
       console.error(`[scrape:all] ✗ ${r.productCode} write failed: ${msg}`);
     }
   };
@@ -420,7 +440,12 @@ async function runAll(args: Args): Promise<void> {
     const minutes = Math.floor(elapsedSec / 60);
     const seconds = elapsedSec % 60;
     const timeStr = `${minutes}m ${seconds}s`;
-    const hasErrors = summary.errors.length > 0;
+    // 015: status badge artık sadece effective_errors'a bakar (stale errors yok sayılır).
+    // Order phase hataları (orderPhase'de pushError) aktif kabul edilir (catalog tracking dışı).
+    const effectiveCatalogErrors = summary.effective_errors ?? 0;
+    const staleCatalogErrors = summary.stale_errors ?? 0;
+    const orderErrors = summary.errors.length - effectiveCatalogErrors - staleCatalogErrors;
+    const hasEffectiveErrors = effectiveCatalogErrors + Math.max(0, orderErrors) > 0;
     const hasWork =
       summary.orders_inserted > 0 ||
       summary.items_inserted > 0 ||
@@ -428,18 +453,28 @@ async function runAll(args: Args): Promise<void> {
 
     console.log("[scrape:all] Özet:");
     printSummary(summary);
+    if (staleCatalogErrors > 0) {
+      console.log(
+        `[scrape:all] ℹ ${staleCatalogErrors} hata devre dışı ürünlerden (status'u etkilemez)`,
+      );
+    }
+    if ((summary.newly_disabled ?? 0) > 0) {
+      console.log(
+        `[scrape:all] ⚠ ${summary.newly_disabled} ürün bu run'da devre dışı bırakıldı (3 ardışık gün başarısız)`,
+      );
+    }
 
-    if (hasErrors && hasWork) {
-      console.log(`[scrape:all] ⚠ Kısmi başarı (${summary.errors.length} hata) — ${timeStr}`);
+    if (hasEffectiveErrors && hasWork) {
+      console.log(`[scrape:all] ⚠ Kısmi başarı (${effectiveCatalogErrors + Math.max(0, orderErrors)} aktif hata) — ${timeStr}`);
       await partialRun(runId, summary);
       if (args.triggerType === "auto") {
         await updateScheduleCache(supplierId, "partial").catch(() => undefined);
       }
       activeRun = null;
       process.exit(0);
-    } else if (hasErrors) {
-      console.log(`[scrape:all] ❌ Başarısız (${summary.errors.length} hata) — ${timeStr}`);
-      await failRun(runId, `${summary.errors.length} hata kaydedildi`, summary);
+    } else if (hasEffectiveErrors) {
+      console.log(`[scrape:all] ❌ Başarısız (${effectiveCatalogErrors + Math.max(0, orderErrors)} aktif hata) — ${timeStr}`);
+      await failRun(runId, `${effectiveCatalogErrors + Math.max(0, orderErrors)} aktif hata`, summary);
       if (args.triggerType === "auto") {
         await updateScheduleCache(supplierId, "failed").catch(() => undefined);
       }
