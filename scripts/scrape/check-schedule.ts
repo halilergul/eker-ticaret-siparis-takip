@@ -85,7 +85,7 @@ async function main(): Promise<void> {
 
   const { data, error } = await supabase
     .from("scrape_schedule")
-    .select("enabled, daily_hour_utc, suppliers!inner(slug)")
+    .select("enabled, daily_hour_utc, last_auto_run_at, suppliers!inner(slug)")
     .eq("suppliers.slug", args.supplier!)
     .maybeSingle();
 
@@ -101,15 +101,28 @@ async function main(): Promise<void> {
     emitSkip(`supplier=${args.supplier} disabled`);
   }
 
+  // 016: hour-window fix — GH Actions cron gecikirse (5-60 dk normal) currentUtcHour
+  // scheduled saatten büyük olabilir. Eskiden exact match arıyordu → gecikince skip.
+  // Yeni: bugün henüz auto koşmadıysa ve scheduled saat geçmişse çalıştır.
   const currentUtcHour = new Date().getUTCHours();
-  if (data.daily_hour_utc !== currentUtcHour) {
+  if (currentUtcHour < data.daily_hour_utc) {
     emitSkip(
-      `supplier=${args.supplier} hour=${data.daily_hour_utc} != current=${currentUtcHour}`,
+      `supplier=${args.supplier} too early: current UTC=${currentUtcHour} < scheduled=${data.daily_hour_utc}`,
+    );
+  }
+
+  const todayUtc = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const lastRunDay = data.last_auto_run_at
+    ? new Date(data.last_auto_run_at).toISOString().slice(0, 10)
+    : null;
+  if (lastRunDay === todayUtc) {
+    emitSkip(
+      `supplier=${args.supplier} already ran today (${lastRunDay})`,
     );
   }
 
   emitContinue(
-    `supplier=${args.supplier} hour matches (UTC=${currentUtcHour})`,
+    `supplier=${args.supplier} ready (UTC=${currentUtcHour}, scheduled=${data.daily_hour_utc}, last_auto=${lastRunDay ?? "never"})`,
   );
 }
 
