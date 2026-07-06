@@ -22,16 +22,21 @@ on:
         options:
           - manual
 
-concurrency:
-  group: scrape-${{ github.event.inputs.supplier || 'enderyapi' }}
-  cancel-in-progress: false
-
 jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 55
+    # 016 fix: schedule event'inde 4 tedarikçi paralel, workflow_dispatch tek supplier.
+    # Öncesinde SUPPLIER default 'enderyapi' idi → cron sadece Enderyapı'yı tetikliyordu.
+    strategy:
+      fail-fast: false
+      matrix:
+        supplier: ${{ fromJSON(github.event_name == 'schedule' && '["enderyapi","ikizler","leventsimsek","yedekler"]' || format('["{0}"]', github.event.inputs.supplier)) }}
+    concurrency:
+      group: scrape-${{ matrix.supplier }}
+      cancel-in-progress: false
     env:
-      SUPPLIER: ${{ github.event.inputs.supplier || 'enderyapi' }}
+      SUPPLIER: ${{ matrix.supplier }}
       TRIGGER_TYPE: ${{ github.event.inputs.trigger_type || (github.event_name == 'schedule' && 'auto' || 'manual') }}
       # 011 production smoke: Enderyapı pagination ile 172 sipariş + 489 ürün catalog
       # → toplam runner süresi 21-25 dk gözlendi. 2026-06-22: 490 ürün catalog
