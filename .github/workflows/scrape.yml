@@ -1,8 +1,15 @@
 name: Scrape
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # Her saat başı (UTC). Workflow ilk step'i scrape_schedule.daily_hour_utc ile eşleşme kontrol eder.
+  # 2026-07-22: GH Actions quota %90 → Ağustos 1'de reset. Hourly cron kapatıldı
+  # (skip cron başına 4 dk × 12/gün ≈ 48 dk/gün israf). Ağustos 1'de aşağıdaki
+  # schedule bloğunu uncomment et:
+  #
+  # schedule:
+  #   - cron: '0 16-17 * * *'  # 19-20 TR arası 2 deneme (1. başarılı → 2. "already ran today" skip)
+  #
+  # Bu kombinasyon: ~64 dk/gün × 30 = ~1920 dk/ay (2000 dk budget'ın %96'sı, 80 dk emniyet).
+  # Bu ay boyunca sipariş takibi lazımsa: manuel `gh workflow run scrape.yml -f supplier=<slug>`.
   workflow_dispatch:
     inputs:
       supplier:
