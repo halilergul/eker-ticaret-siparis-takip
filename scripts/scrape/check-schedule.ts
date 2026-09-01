@@ -115,10 +115,22 @@ async function main(): Promise<void> {
   const lastRunDay = data.last_auto_run_at
     ? new Date(data.last_auto_run_at).toISOString().slice(0, 10)
     : null;
-  if (lastRunDay === todayUtc) {
-    emitSkip(
-      `supplier=${args.supplier} already ran today (${lastRunDay})`,
+
+  // 2026-08-28: Otomatik cron iki günde bir. GH Actions minutes quota'da rahat
+  // kalmak için (900 dk/ay ≈ %45 doluluk) auto run'lar 48h aralıklı. Manuel
+  // workflow_dispatch bu filtreden geçmez (check-schedule step schedule event'te
+  // koşar, dispatch'te bypass). İlk kez koşulacaksa (last_auto_run_at NULL)
+  // filtreye takılmaz.
+  const AUTO_INTERVAL_DAYS = 2;
+  if (lastRunDay) {
+    const diffDays = Math.floor(
+      (Date.parse(todayUtc) - Date.parse(lastRunDay)) / (24 * 3600 * 1000),
     );
+    if (diffDays < AUTO_INTERVAL_DAYS) {
+      emitSkip(
+        `supplier=${args.supplier} last auto ${diffDays}d ago (< ${AUTO_INTERVAL_DAYS}d interval)`,
+      );
+    }
   }
 
   emitContinue(
